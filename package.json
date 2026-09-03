@@ -35,5 +35,8 @@
 		"vite": "^8.0.16",
 		"vitest": "^4.1.8",
 		"wrangler": "^4.97.0"
+	},
+	"dependencies": {
+		"yahoo-finance2": "^4.0.2"
 	}
 }

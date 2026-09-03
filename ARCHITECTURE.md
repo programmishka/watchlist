@@ -102,7 +102,7 @@ Svelte components and client-side stores MUST NOT contain investment calculation
 | Login mechanism      | Email One-Time PIN                                          |
 | Persistence          | Cloudflare Workers KV                                       |
 | Market data          | Yahoo Finance                                               |
-| Yahoo integration    | `yahoo-finance2` to be evaluated first                      |
+| Yahoo integration    | `yahoo-finance2`                                            |
 | FX data              | Frankfurter API                                             |
 | API style            | JSON over HTTP / REST-style endpoints                       |
 | Unit testing         | TypeScript test framework selected during project bootstrap |
@@ -665,27 +665,6 @@ The initial architecture does not persist or explicitly cache market data.
 
 Caching may be introduced later if necessary.
 
-### 15.4 Yahoo Integration Spike
-
-Before relying on the implementation, a technical spike MUST evaluate whether `yahoo-finance2` works reliably in the Cloudflare Workers runtime.
-
-The spike shall verify:
-
-* Cloudflare Workers compatibility;
-* quote retrieval;
-* international stock symbols;
-* home-exchange stocks;
-* required fields;
-* cookie handling;
-* crumb handling;
-* batch symbol queries.
-
-The test set should contain representative stocks from several relevant markets rather than only US stocks.
-
-If `yahoo-finance2` proves unsuitable, a custom Yahoo adapter may reproduce the existing cookie/crumb workflow.
-
-Any Yahoo authentication/session material MUST be stored as a server-side secret and MUST NOT be exposed to the client or committed to source control.
-
 ---
 
 ## 16. Market-Data Error Handling
@@ -1241,19 +1220,31 @@ These are not part of the initial implementation unless introduced through a lat
 
 ---
 
-## 32. Open Technical Validation
+## 32. Yahoo Finance Integration Decision
 
-The following item must be resolved through an implementation spike before relying on it as production architecture:
+`yahoo-finance2` is the accepted Yahoo Finance integration.
 
-### Yahoo Finance / yahoo-finance2
+Version 4.0.2 was validated against representative international stocks
+and successfully executed inside the Cloudflare Workers `workerd` runtime.
 
-Validate `yahoo-finance2` in Cloudflare Workers with representative international symbols.
+The library automatically handles the Yahoo cookie/crumb mechanism. No
+user-provided Yahoo cookie is required.
 
-If successful, use it behind `MarketDataProvider`.
+The integration must observe the following constraints:
 
-If unsuccessful, implement the proven Yahoo cookie/crumb workflow behind the same provider abstraction.
+- single-symbol lookups may return `undefined` for unknown symbols instead
+  of throwing an error;
+- batch results must be compared with the requested symbols to identify
+  missing results;
+- missing Yahoo fields must be handled explicitly;
+- Yahoo-specific behavior remains isolated behind `MarketDataProvider`;
+- Cloudflare runtime compatibility must be re-evaluated before relying on
+  additional `yahoo-finance2` modules;
+- Yahoo remains an unofficial external dependency and failures or
+  rate-limiting must be handled as provider failures.
 
-The rest of the application MUST remain independent of which Yahoo access mechanism is ultimately selected.
+The spike and supporting evidence are documented in
+`docs/spikes/002-yahoo-finance.md`.
 
 ---
 
