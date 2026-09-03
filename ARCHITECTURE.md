@@ -869,6 +869,13 @@ Target prices:
 * may contain decimal values;
 * are expressed in the corresponding stock's trading currency.
 
+Setting a target price for a `User + Symbol` that already has one replaces
+the existing value; there is exactly one current target price per
+`User + Symbol`, and no target-price history is kept.
+
+There is currently no target-price delete use case. A target price can be
+created or replaced, but not explicitly deleted by the user.
+
 The UI should accept locale-friendly decimal input, including comma-based decimal notation where appropriate.
 
 The REST API communicates numeric values as JSON numbers using standard JSON numeric syntax.
