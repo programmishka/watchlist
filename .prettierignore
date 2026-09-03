@@ -1,0 +1,17 @@
+# Package Managers
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lock
+bun.lockb
+
+# Miscellaneous
+/static/
+
+# Pre-existing project documentation with an established format,
+# outside the scope of formatting tooling introduced by this task.
+/ARCHITECTURE.md
+/CLAUDE.md
+/docs/
+/.claude/settings.json
+/.claude/settings.local.json
