@@ -144,3 +144,23 @@ Before considering a task complete:
 6. Summarize what was changed and which checks were executed.
 
 If an acceptance criterion cannot be satisfied, state that explicitly instead of silently omitting it.
+
+## Task Status
+
+Task specifications under `docs/tasks/` use the following statuses:
+
+- `Draft` - not ready for implementation.
+- `Ready` - approved and ready for implementation.
+- `Done` - implementation and verification completed successfully.
+
+Only implement tasks with status `Ready`.
+
+After all acceptance criteria are satisfied and all required verification
+checks pass, change the task's status from `Ready` to `Done`.
+
+Do not mark a task as `Done` if:
+- an acceptance criterion is not satisfied;
+- a required verification check fails;
+- a blocking issue remains unresolved.
+
+Do not modify the status of unrelated tasks.
