@@ -50,6 +50,20 @@ Refer to `ARCHITECTURE.md` for the detailed domain model, persistence model, cal
 * Validate mutation input on the server.
 * Return application-level errors instead of exposing raw infrastructure or provider errors.
 
+## Git Workflow
+
+Git repository history is managed by the user.
+
+- Do not stage changes.
+- Do not create commits.
+- Do not push changes to any remote repository.
+- Do not amend, reset, rebase, or otherwise modify Git history.
+- You may use read-only Git commands such as `git status`, `git diff`, and
+  `git log` to inspect the repository and review your changes.
+
+After completing a task, leave all changes in the working tree for the user
+to review and commit manually.
+
 ## Business Logic
 
 Business calculations should preferably be implemented as pure functions where practical.

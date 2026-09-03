@@ -106,10 +106,37 @@ Svelte components and client-side stores MUST NOT contain investment calculation
 | FX data              | Frankfurter API                                             |
 | API style            | JSON over HTTP / REST-style endpoints                       |
 | Unit testing         | TypeScript test framework selected during project bootstrap |
+| Styling              | Native CSS                                                  |
+| Responsive Design    | CSS Grid, Flexbox, and media/container queries              |
 
 A separate Node.js backend application is not planned.
 
 SvelteKit server functionality provides the backend part of the application.
+
+### 5.1 UI and Styling
+
+The application uses modern native CSS for layout, styling, and responsive
+design.
+
+No general-purpose CSS framework such as Tailwind CSS, Bootstrap, or
+Semantic UI is planned.
+
+Preferred CSS capabilities include:
+
+- CSS Grid;
+- Flexbox;
+- media queries;
+- container queries where appropriate;
+- modern responsive sizing functions such as `min()`, `max()`, and `clamp()`.
+
+Small Svelte-native headless component libraries may be introduced when
+they provide a concrete benefit for complex interactive or accessibility-
+sensitive components.
+
+Bits UI is the preferred candidate if such a library becomes necessary.
+
+Do not introduce a UI component library or CSS framework without a concrete
+requirement.
 
 ---
 
@@ -555,9 +582,52 @@ The table footer displays:
 
 ---
 
-## 14. Market Data
+## 14. Responsive Design
 
-### 14.1 Provider
+The application must remain usable on desktop and mobile screen sizes.
+
+Responsive behavior is implemented using native CSS rather than a
+responsive UI framework.
+
+### 14.1 General Layout
+
+Toolbars and input groups should adapt to available space using CSS Grid
+or Flexbox.
+
+Controls may wrap or switch from horizontal to vertical layouts on smaller
+viewports.
+
+Responsive behavior should be driven by actual UI requirements rather than
+a large predefined breakpoint system.
+
+### 14.2 Watchlist Table
+
+The watchlist table contains more columns than can reasonably fit on a
+small mobile viewport.
+
+For the initial implementation:
+
+- preserve the tabular representation;
+- allow horizontal scrolling on narrow viewports;
+- keep the table usable without breaking the surrounding page layout;
+- do not introduce a separate mobile card representation.
+
+A dedicated mobile representation or selective column hiding may be
+considered as a future improvement if horizontal scrolling proves
+insufficient.
+
+### 14.3 Accessibility
+
+Interactive controls must remain keyboard-accessible and usable across
+supported viewport sizes.
+
+For complex interactive controls such as modal confirmation dialogs,
+prefer native platform capabilities or accessible Svelte-native headless
+components over implementing accessibility behavior from scratch.
+
+## 15. Market Data
+
+### 15.1 Provider
 
 Yahoo Finance is initially used as the market-data source.
 
@@ -567,7 +637,7 @@ The application therefore MUST isolate Yahoo-specific behavior behind a market-d
 
 Domain and application code MUST NOT depend directly on Yahoo response structures.
 
-### 14.2 Required Yahoo Fields
+### 15.2 Required Yahoo Fields
 
 Currently required Yahoo information is:
 
@@ -582,7 +652,7 @@ marketCap
 
 The Yahoo adapter maps these fields into application-owned types.
 
-### 14.3 Data Loading
+### 15.3 Data Loading
 
 Market data is loaded:
 
@@ -595,7 +665,7 @@ The initial architecture does not persist or explicitly cache market data.
 
 Caching may be introduced later if necessary.
 
-### 14.4 Yahoo Integration Spike
+### 15.4 Yahoo Integration Spike
 
 Before relying on the implementation, a technical spike MUST evaluate whether `yahoo-finance2` works reliably in the Cloudflare Workers runtime.
 
@@ -618,7 +688,7 @@ Any Yahoo authentication/session material MUST be stored as a server-side secret
 
 ---
 
-## 15. Market-Data Error Handling
+## 16. Market-Data Error Handling
 
 Market-data retrieval should support partial success.
 
@@ -635,9 +705,9 @@ If Yahoo Finance itself cannot be reached or the request fails globally:
 
 ---
 
-## 16. Currency and Exchange Rates
+## 17. Currency and Exchange Rates
 
-### 16.1 FX Provider
+### 17.1 FX Provider
 
 Frankfurter is used as the initial exchange-rate provider.
 
@@ -649,7 +719,7 @@ ExchangeRateProvider
 
 Domain logic MUST NOT depend directly on Frankfurter response structures.
 
-### 16.2 Currency Normalization
+### 17.2 Currency Normalization
 
 Provider-specific currency units must be normalized before generic FX conversion.
 
@@ -665,7 +735,7 @@ Therefore:
 
 This is a unit-normalization rule, not an exchange-rate rule.
 
-### 16.3 FX Failure
+### 17.3 FX Failure
 
 Failure of the FX provider should not make all Yahoo market data unusable.
 
@@ -677,7 +747,7 @@ If exchange-rate data cannot be retrieved:
 
 ---
 
-## 17. Market Capitalization
+## 18. Market Capitalization
 
 Yahoo market capitalization is treated as being expressed in the stock's corresponding market currency.
 
@@ -714,7 +784,7 @@ Exact presentation rounding is a UI concern and may be defined during implementa
 
 ---
 
-## 18. Dividend Yield
+## 19. Dividend Yield
 
 Yahoo's `trailingAnnualDividendRate` cannot always be consumed without normalization.
 
@@ -747,7 +817,7 @@ dividendYield =
 
 If dividend or market price is absent, invalid, or non-positive, dividend yield is `0`.
 
-### 18.1 Known Yahoo Corrections
+### 19.1 Known Yahoo Corrections
 
 Known corrections from the existing application include:
 
@@ -767,7 +837,7 @@ These corrections MUST be isolated in Yahoo-specific normalization code rather t
 
 ---
 
-## 19. Target Price
+## 20. Target Price
 
 Target price is user-editable.
 
@@ -786,7 +856,7 @@ The server MUST validate target-price input.
 
 ---
 
-## 20. Distance to Target
+## 21. Distance to Target
 
 Changing a target price causes `distanceToTarget` to be recalculated.
 
@@ -821,7 +891,7 @@ A negative distance means the current market price is below the target price.
 
 ---
 
-## 21. Investment Allocation
+## 22. Investment Allocation
 
 Investment allocation is explicitly triggered by the user.
 
@@ -831,7 +901,7 @@ The calculation uses **all stocks in the currently selected watchlist**.
 
 The current table filter MUST NOT influence investment allocation.
 
-### 21.1 Factor
+### 22.1 Factor
 
 For every stock:
 
@@ -853,7 +923,7 @@ function calculateFactor(targetPriceDistance?: number) {
 }
 ```
 
-### 21.2 Factor Sum
+### 22.2 Factor Sum
 
 ```text
 factorSum = sum(stock.factor)
@@ -861,7 +931,7 @@ factorSum = sum(stock.factor)
 
 over all stocks of the current watchlist.
 
-### 21.3 Savings Amount
+### 22.3 Savings Amount
 
 For every stock:
 
@@ -874,7 +944,7 @@ If the stock has no usable factor or the factor sum cannot be used, its savings 
 
 Savings amounts are always whole-Euro values.
 
-### 21.4 Invested
+### 22.4 Invested
 
 The UI additionally displays:
 
@@ -896,7 +966,7 @@ invested <= totalSavings
 
 Any remainder is intentionally left undistributed.
 
-### 21.5 Persistence
+### 22.5 Persistence
 
 The following values are NOT persisted:
 
@@ -911,7 +981,7 @@ They represent a temporary calculation.
 
 ---
 
-## 22. Recalculation Behaviour
+## 23. Recalculation Behaviour
 
 The initial version retains the explicit investment-calculation workflow.
 
@@ -932,7 +1002,7 @@ is considered a future improvement.
 
 ---
 
-## 23. REST API Principles
+## 24. REST API Principles
 
 The server exposes a small JSON/HTTP API through SvelteKit server routes.
 
@@ -963,7 +1033,7 @@ These paths are illustrative rather than final contracts.
 
 ---
 
-## 24. Server-Side Structure
+## 25. Server-Side Structure
 
 The implementation should maintain clear boundaries without introducing unnecessary Clean Architecture ceremony.
 
@@ -1000,7 +1070,7 @@ The project MUST NOT introduce layers or abstractions solely to imitate enterpri
 
 ---
 
-## 25. Client-Side State
+## 26. Client-Side State
 
 Client-side state should remain close to presentation concerns.
 
@@ -1025,9 +1095,9 @@ Holding server data in client state does not make the client responsible for der
 
 ---
 
-## 26. Testing Strategy
+## 27. Testing Strategy
 
-### 26.1 Unit Tests
+### 27.1 Unit Tests
 
 Unit tests are required for business logic.
 
@@ -1054,7 +1124,7 @@ Business calculations should be implemented so they can be tested without:
 
 New or changed business rules SHOULD be accompanied by corresponding unit tests.
 
-### 26.2 Integration Tests
+### 27.2 Integration Tests
 
 Integration tests may be added selectively.
 
@@ -1062,7 +1132,7 @@ External infrastructure should normally be represented by test doubles/mocks/fak
 
 A dedicated deployed test environment is not required for the initial project.
 
-### 26.3 End-to-End Tests
+### 27.3 End-to-End Tests
 
 Automated E2E testing is initially out of scope.
 
@@ -1072,7 +1142,7 @@ This decision may be revisited as the application grows.
 
 ---
 
-## 27. External Dependency Strategy
+## 28. External Dependency Strategy
 
 External systems must be treated as replaceable infrastructure.
 
@@ -1102,7 +1172,7 @@ Yahoo Finance is considered the highest-risk external dependency because its API
 
 ---
 
-## 28. Security Principles
+## 29. Security Principles
 
 The application shall follow these rules:
 
@@ -1118,7 +1188,7 @@ The application shall follow these rules:
 
 ---
 
-## 29. Empty and Error States
+## 30. Empty and Error States
 
 The UI should explicitly represent meaningful empty/error states.
 
@@ -1150,7 +1220,7 @@ Continue displaying available non-FX-dependent information and indicate that cur
 
 ---
 
-## 30. Future Improvements
+## 31. Future Improvements
 
 The following ideas are intentionally left open:
 
@@ -1164,13 +1234,14 @@ The following ideas are intentionally left open:
 * watchlist sharing;
 * collaborative features;
 * automated E2E testing;
-* more advanced investment-allocation strategies.
+* more advanced investment-allocation strategies;
+* dedicated mobile stock-card representation or responsive column selection.
 
 These are not part of the initial implementation unless introduced through a later architectural decision or task.
 
 ---
 
-## 31. Open Technical Validation
+## 32. Open Technical Validation
 
 The following item must be resolved through an implementation spike before relying on it as production architecture:
 
@@ -1186,7 +1257,7 @@ The rest of the application MUST remain independent of which Yahoo access mechan
 
 ---
 
-## 32. Architecture Summary
+## 33. Architecture Summary
 
 The target architecture is deliberately small:
 
