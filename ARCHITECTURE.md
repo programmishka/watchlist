@@ -880,7 +880,18 @@ The calculation uses **all stocks in the currently selected watchlist**.
 
 The current table filter MUST NOT influence investment allocation.
 
-### 22.1 Factor
+### 22.1 Total Savings Validation
+
+`totalSavings` must be a finite, non-negative integer.
+
+- `0` is valid and results in zero allocation for all stocks.
+- negative values are invalid;
+- fractional values are invalid;
+- `NaN` and infinite values are invalid.
+
+Invalid total-savings input must be rejected rather than coerced.
+
+### 22.2 Factor
 
 For every stock:
 
@@ -902,7 +913,13 @@ function calculateFactor(targetPriceDistance?: number) {
 }
 ```
 
-### 22.2 Factor Sum
+Mathematically invalid or non-finite factor results do not participate in
+the allocation and are treated as factor `0`.
+
+Factors that are non-finite or non-positive are treated as `0` during
+factor summation and allocation.
+
+### 22.3 Factor Sum
 
 ```text
 factorSum = sum(stock.factor)
@@ -910,7 +927,7 @@ factorSum = sum(stock.factor)
 
 over all stocks of the current watchlist.
 
-### 22.3 Savings Amount
+### 22.4 Savings Amount
 
 For every stock:
 
@@ -923,7 +940,7 @@ If the stock has no usable factor or the factor sum cannot be used, its savings 
 
 Savings amounts are always whole-Euro values.
 
-### 22.4 Invested
+### 22.5 Invested
 
 The UI additionally displays:
 
@@ -945,7 +962,7 @@ invested <= totalSavings
 
 Any remainder is intentionally left undistributed.
 
-### 22.5 Persistence
+### 22.6 Persistence
 
 The following values are NOT persisted:
 
