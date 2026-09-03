@@ -23,6 +23,21 @@ Start the local development server:
 npm run dev
 ```
 
+## Previewing Against the Cloudflare Runtime
+
+`npm run dev` does not provide Cloudflare bindings (KV, Access) or run under
+`workerd`. To exercise those locally, build and preview the actual Worker:
+
+```sh
+npm run build
+npm run preview
+```
+
+`wrangler.jsonc` configures a synthetic local development identity
+(`access.dev`) so `npm run preview` simulates being authenticated via
+Cloudflare Access, without a real login. This is local-only and has no
+effect in production, where Cloudflare Access performs real authentication.
+
 ## Testing
 
 Run the unit test suite:

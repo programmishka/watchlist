@@ -256,7 +256,9 @@ The application MUST NOT:
 
 The authenticated Cloudflare Access identity is the source of the application user identity.
 
-The stable Access user identifier from the validated identity/JWT, represented by the `sub` claim, shall be used as the application user ID.
+The application derives the authenticated user identity from the Cloudflare Workers Access context (ctx.access). The stable Access user identifier returned by the authenticated identity is used as the application user ID. Application code does not parse or validate Access JWTs itself.
+
+If `ctx.access` is unavailable, or Access returns no identity, the application MUST treat the request as unauthenticated. It MUST NOT fall back to an anonymous or hard-coded identity. Absence of a valid Access context always fails closed.
 
 Email addresses may be used for display purposes but MUST NOT be used as persistent primary identifiers for application data.
 

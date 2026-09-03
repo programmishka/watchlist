@@ -18,5 +18,19 @@
 			"binding": "WATCHLIST_KV",
 			"id": "local-dev-watchlist-kv"
 		}
-	]
+	],
+	// Local dev simulation of Cloudflare Access (`wrangler dev` only). Not a
+	// real Access application; production Access must be configured manually
+	// in the Cloudflare dashboard against the deployed Worker. "aud" and
+	// "identity" are synthetic, non-production placeholder values.
+	"access": {
+		"dev": {
+			"aud": "local-development-audience",
+			"identity": {
+				"email": "developer@example.test",
+				"name": "Local Development User",
+				"user_uuid": "local-development-user"
+			}
+		}
+	}
 }
