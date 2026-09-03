@@ -9,5 +9,14 @@
 		"directory": ".svelte-kit/cloudflare"
 	},
 	"workers_dev": true,
-	"preview_urls": true
+	"preview_urls": true,
+	// Local-development-only KV namespace binding (no production namespace
+	// created by this task). Provide a real "id" here once a production
+	// namespace has been created via `wrangler kv namespace create`.
+	"kv_namespaces": [
+		{
+			"binding": "WATCHLIST_KV",
+			"id": "local-dev-watchlist-kv"
+		}
+	]
 }
