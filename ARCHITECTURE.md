@@ -469,7 +469,8 @@ Rules:
 
 * the name is required;
 * duplicate names are allowed;
-* every watchlist receives a unique ID.
+* every watchlist receives a unique ID;
+* the newly created watchlist becomes the active watchlist, even when other watchlists already exist.
 
 ### 11.2 Deleting a Watchlist
 
@@ -487,6 +488,12 @@ If no watchlists remain:
 
 * the application displays an appropriate empty state;
 * the delete-watchlist action is disabled.
+
+If other watchlists remain after deletion, the new active watchlist is selected deterministically:
+
+> Select the previous watchlist in tab order. If the deleted watchlist was the first watchlist, select the new first watchlist.
+
+The relative order of the remaining watchlists is otherwise preserved.
 
 ### 11.3 Active Watchlist
 
