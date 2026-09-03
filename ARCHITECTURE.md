@@ -714,6 +714,12 @@ Therefore:
 
 This is a unit-normalization rule, not an exchange-rate rule.
 
+This value-scaling rule applies to price/dividend-like fields. It does
+**not** apply uniformly to every Yahoo numeric field: TASK-002 empirically
+established that Yahoo's `marketCap` is not pence-scaled even when
+`currency = GBp`. Market-cap FX conversion instead uses only a currency
+*code* mapping (`GBp` -> `GBP`), with no value scaling — see §18.
+
 ### 17.3 FX Failure
 
 Failure of the FX provider should not make all Yahoo market data unusable.
@@ -740,10 +746,10 @@ Conceptually:
 Yahoo marketCap
       |
       v
-normalize currency/unit
+map market currency to FX currency code
       |
       v
-convert to USD
+convert to USD (no value scaling)
       |
       v
 divide by 1,000,000,000
@@ -758,6 +764,14 @@ Formula:
 capInBillionsUsd =
     convertToUsd(marketCap, currency) / 1_000_000_000
 ```
+
+The "map market currency to FX currency code" step is a currency-*code*
+mapping only (e.g. `GBp` -> `GBP` for the exchange-rate lookup). It MUST
+NOT scale `marketCap` itself — in particular, `marketCap` MUST NOT be
+divided by 100 when `currency = GBp`. This differs from the price/dividend
+`GBp` unit normalization described in §17.2, which does scale the value.
+TASK-002 confirmed Yahoo already reports `marketCap` in major-currency-unit
+scale even when `currency = GBp`.
 
 Exact presentation rounding is a UI concern and may be defined during implementation.
 
