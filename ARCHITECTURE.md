@@ -781,7 +781,9 @@ Exact presentation rounding is a UI concern and may be defined during implementa
 
 Yahoo's `trailingAnnualDividendRate` cannot always be consumed without normalization.
 
-The application therefore treats Yahoo dividend corrections as provider-specific normalization rules.
+The production implementation intentionally contains exactly one
+normalization rule (`GBp`, see §19.1). It is a fixed unit relationship, not
+an exchange-rate conversion, and does not depend on `ExchangeRateProvider`.
 
 Conceptually:
 
@@ -789,7 +791,7 @@ Conceptually:
 Yahoo trailingAnnualDividendRate
              |
              v
-Yahoo dividend normalization
+GBp unit normalization (only when currency = GBp)
              |
              v
 normalized annual dividend
@@ -801,32 +803,49 @@ normalizedDividend / regularMarketPrice
 dividend yield
 ```
 
-The general calculation is:
+Normal case:
 
 ```text
 dividendYield =
-    normalizedAnnualDividend / regularMarketPrice
+    annualDividend / regularMarketPrice
 ```
+
+GBp case:
+
+```text
+dividendYield =
+    (annualDividend * 100) / regularMarketPrice
+```
+
+The `GBp` adjustment exists because Yahoo expresses `regularMarketPrice` in
+pence for `GBp`-quoted stocks while `annualDividend` is treated as GBP for
+this calculation; multiplying by 100 puts both values in pence before
+dividing.
 
 If dividend or market price is absent, invalid, or non-positive, dividend yield is `0`.
 
-### 19.1 Known Yahoo Corrections
+### 19.1 GBp Unit Normalization
 
-Known corrections from the existing application include:
+The only current production dividend-normalization rule is:
 
 ```text
-currency GBp       -> dividend * 100
-currency INR       -> dividend * 100
-symbol LISP.SW     -> dividend / 10
-symbol HEXA-B.ST   -> provider-specific multiplier
-symbol TOM.OL      -> provider-specific multiplier
+currency GBp -> annualDividend * 100 (before dividing by price)
 ```
 
-The exact multipliers for `HEXA-B.ST` and `TOM.OL` MUST be verified before implementation.
+This rule applies solely to dividend-yield calculation. It MUST NOT be
+applied to `StockMarketData.marketCap`, which uses a separate, FX-based
+rule (§18): `GBp` maps to the FX currency code `GBP` with no `* 100` or
+`/ 100` scaling of the market-cap value. Keep these two `GBp` rules
+distinct.
 
-The legacy source contains JavaScript comma-expression constructs that may not represent the originally intended decimal multipliers.
-
-These corrections MUST be isolated in Yahoo-specific normalization code rather than general investment-domain logic.
+The legacy application also applied an `INR -> dividend * 100` correction
+and symbol-specific corrections for `LISP.SW`, `HEXA-B.ST`, and `TOM.OL`.
+These were intentionally discarded during TASK-006: current evidence does
+not justify retaining them, and they are not part of the production
+implementation. If Yahoo data for a specific stock or currency is later
+demonstrated to require correction, it must be introduced through a
+separate explicit requirement with current evidence and corresponding
+tests, not reinstated from the legacy source.
 
 ---
 
