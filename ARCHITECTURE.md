@@ -517,11 +517,22 @@ When the user returns to the application, that watchlist should be selected when
 
 The user enters a stock symbol and confirms using the add action.
 
-The server resolves the symbol using the configured market-data provider.
+The server trims surrounding whitespace from the input, then resolves the
+exact trimmed symbol using the configured market-data provider.
 
-If successful, the symbol is added to the current watchlist.
+If successful, that exact trimmed input — not the provider-returned symbol,
+and without case normalization — is added to the current watchlist. The
+provider-returned symbol is evidence the lookup succeeded, not a
+canonicalization instruction. The market data retrieved for this validation
+is transient and is not persisted; the next watchlist query retrieves
+current market data normally.
 
-If a target price already exists for:
+If the provider does not recognize the symbol, the addition is rejected. If
+the provider itself is unavailable, that is a distinct failure from an
+unrecognized symbol, and the addition is likewise rejected rather than
+silently succeeding.
+
+Adding a stock does not create, update, or load a target price. If a target price already exists for:
 
 ```text
 authenticated user + symbol

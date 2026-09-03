@@ -39,3 +39,15 @@ export class SymbolNotFoundError extends Error {
 		this.name = 'SymbolNotFoundError';
 	}
 }
+
+/**
+ * The market-data provider successfully answered but does not recognize the
+ * symbol — distinct from `MarketDataProviderError`, which means the provider
+ * itself is unavailable/failed.
+ */
+export class UnknownStockSymbolError extends Error {
+	constructor(symbol: string) {
+		super(`Unknown stock symbol: ${symbol}`);
+		this.name = 'UnknownStockSymbolError';
+	}
+}
