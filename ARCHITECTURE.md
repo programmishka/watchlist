@@ -958,6 +958,24 @@ The calculation uses **all stocks in the currently selected watchlist**.
 
 The current table filter MUST NOT influence investment allocation.
 
+Investment allocation is implemented as an explicit, server-side application
+use case, not merely a set of pure formulas. It obtains the current
+Watchlist by consuming the existing read-only Watchlist composition
+(§9.5) rather than independently loading Watchlist membership, Target
+Prices, market data, or exchange rates. It reuses the `distanceToTarget`
+already produced by that composition as the input to the factor formula
+below; it does not recompute target-price distance itself. Because the
+pure factor/allocation/invested formulas operate positionally, the
+application layer is responsible for associating each resulting factor and
+savings amount back to its stock symbol, in the same order the Watchlist
+composition already returns.
+
+Investment allocation depends only on `distanceToTarget`, not on market
+capitalization or currency conversion. A global FX-provider outage — which
+leaves `marketCapBillionsUsd` unavailable but does not affect
+`distanceToTarget` (§17.3) — therefore does not prevent investment
+allocation from completing normally.
+
 ### 22.1 Total Savings Validation
 
 `totalSavings` must be a finite, non-negative integer.
