@@ -33,8 +33,16 @@ function isFrankfurterLatestResponse(value: unknown): value is FrankfurterLatest
 	);
 }
 
+function defaultFetch(url: string): Promise<HttpResponseLike> {
+	// A bare `globalThis.fetch` reference loses its receiver; calling it
+	// detached throws "Illegal invocation" under the Cloudflare Workers
+	// runtime (confirmed via a TASK-013 `wrangler dev` smoke test), even
+	// though it works fine in Node and browsers. Wrapping preserves `this`.
+	return globalThis.fetch(url);
+}
+
 export class FrankfurterAdapter implements ExchangeRateProvider {
-	constructor(private readonly fetchImpl: HttpFetch = globalThis.fetch) {}
+	constructor(private readonly fetchImpl: HttpFetch = defaultFetch) {}
 
 	async getRatesToUsd(currencies: string[]): Promise<ExchangeRateBatchResult> {
 		const requested = new Set(currencies);

@@ -1080,8 +1080,6 @@ is considered a future improvement.
 
 The server exposes a small JSON/HTTP API through SvelteKit server routes.
 
-The exact endpoint design is defined during implementation.
-
 Principles:
 
 * use simple resource-oriented endpoints;
@@ -1093,17 +1091,52 @@ Principles:
 * validate all mutation input server-side;
 * return understandable application errors rather than raw provider or infrastructure exceptions.
 
-Possible resource groups include:
+### 24.1 Implemented Endpoints
 
 ```text
-/api/watchlists
-/api/watchlists/{watchlistId}
-/api/watchlists/{watchlistId}/stocks
-/api/target-prices
-/api/investment-allocation
+GET    /api/watchlists
+POST   /api/watchlists
+PUT    /api/watchlists/active
+DELETE /api/watchlists/active
+GET    /api/watchlists/{watchlistId}
+POST   /api/watchlists/{watchlistId}/stocks
+DELETE /api/watchlists/{watchlistId}/stocks/{symbol}
+PUT    /api/target-prices/{symbol}
 ```
 
-These paths are illustrative rather than final contracts.
+There is intentionally no `GET /api/target-prices` or `GET /api/target-prices/{symbol}`. Target Prices are only ever observed as part of a composed Watchlist (`GET /api/watchlists/{watchlistId}`); the Target Price service otherwise remains an internal application capability.
+
+Mutation endpoints return the resulting UI-useful state (updated Watchlist metadata, or the updated composed Watchlist) so the client does not need an immediate follow-up `GET`.
+
+An investment-allocation endpoint is a future addition and is not part of this API.
+
+### 24.2 Authentication
+
+Every endpoint above requires an authenticated user, derived exclusively from `event.locals.user.id` (populated by the TASK-008 server hook from Cloudflare Access). A request with no authenticated user receives `401 UNAUTHENTICATED`. The user ID is never accepted from a query parameter, request body, or URL path segment.
+
+### 24.3 API Error and Warning Shape
+
+Errors use a stable JSON shape independent of internal exception class names:
+
+```json
+{ "error": { "code": "DUPLICATE_SYMBOL", "message": "The symbol already exists in this watchlist." } }
+```
+
+Supported codes: `UNAUTHENTICATED`, `INVALID_REQUEST`, `WATCHLIST_NOT_FOUND`, `NO_ACTIVE_WATCHLIST`, `INVALID_WATCHLIST_NAME`, `INVALID_SYMBOL`, `UNKNOWN_STOCK_SYMBOL`, `DUPLICATE_SYMBOL`, `SYMBOL_NOT_FOUND`, `INVALID_TARGET_PRICE`, `MARKET_DATA_UNAVAILABLE`, `PERSISTENCE_ERROR`, `INTERNAL_ERROR`. Business/domain/provider exception classes remain independent of HTTP; one small server-side mapping helper centralizes the translation to status + code + message, so routes never expose raw Yahoo/Frankfurter/Cloudflare errors or reproduce this mapping themselves.
+
+Non-fatal degraded conditions (e.g. the FX provider being globally unavailable, or a post-save market-data refresh failing) are represented as warnings on an otherwise-successful response, using the same stable-code principle: `FX_PROVIDER_UNAVAILABLE`, `MARKET_DATA_UNAVAILABLE`.
+
+### 24.4 Composition Root
+
+Concrete infrastructure (Cloudflare KV repositories, the Yahoo adapter, the Frankfurter adapter) is wired server-side by a small per-request composition root/factory, constructed from the current request's Cloudflare platform bindings (`event.platform.env.WATCHLIST_KV`). Routes depend on this factory rather than instantiating infrastructure themselves or duplicating KV/Yahoo/Frankfurter logic. If the required platform binding is unavailable, service construction fails rather than silently falling back to an in-memory substitute.
+
+### 24.5 Target Price Mutation and Market-Data Refresh
+
+`PUT /api/target-prices/{symbol}` persists the Target Price first. It then attempts a market-data lookup to compute `distanceToTarget` for the response. A failed or unavailable lookup at this stage does **not** roll back or fail the already-successful save — the response still reflects the persisted Target Price, omits `distanceToTarget`, and carries a `MARKET_DATA_UNAVAILABLE` warning instead.
+
+### 24.6 Numeric Representation
+
+API numeric values (`price`, `targetPrice`, `distanceToTarget`, `dividendYield`, `marketCapBillionsUsd`) are plain JSON numbers, never locale-formatted strings. Locale-specific parsing and display formatting belong to the client.
 
 ---
 

@@ -26,7 +26,9 @@ npm run dev
 ## Previewing Against the Cloudflare Runtime
 
 `npm run dev` does not provide Cloudflare bindings (KV, Access) or run under
-`workerd`. To exercise those locally, build and preview the actual Worker:
+`workerd`. The `/api/*` routes require the real `WATCHLIST_KV` binding to
+construct their application services and will fail under plain `npm run dev`.
+To exercise the full server API locally, build and preview the actual Worker:
 
 ```sh
 npm run build
@@ -37,6 +39,13 @@ npm run preview
 (`access.dev`) so `npm run preview` simulates being authenticated via
 Cloudflare Access, without a real login. This is local-only and has no
 effect in production, where Cloudflare Access performs real authentication.
+
+In short:
+
+```text
+npm run dev     -> UI/basic Vite development, no Cloudflare bindings
+npm run preview -> Access + KV + Yahoo/Frankfurter + full server API, under workerd
+```
 
 ## Testing
 

@@ -1,0 +1,21 @@
+export type ApiErrorCode =
+	| 'UNAUTHENTICATED'
+	| 'INVALID_REQUEST'
+	| 'WATCHLIST_NOT_FOUND'
+	| 'NO_ACTIVE_WATCHLIST'
+	| 'INVALID_WATCHLIST_NAME'
+	| 'INVALID_SYMBOL'
+	| 'UNKNOWN_STOCK_SYMBOL'
+	| 'DUPLICATE_SYMBOL'
+	| 'SYMBOL_NOT_FOUND'
+	| 'INVALID_TARGET_PRICE'
+	| 'MARKET_DATA_UNAVAILABLE'
+	| 'PERSISTENCE_ERROR'
+	| 'INTERNAL_ERROR';
+
+export interface ApiErrorResponse {
+	error: {
+		code: ApiErrorCode;
+		message: string;
+	};
+}
