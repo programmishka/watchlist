@@ -384,13 +384,21 @@ Exchange Rates
 Derived Watchlist Stock
 ```
 
-Derived values include:
+This composition is performed by a read-only server-side query/composition
+step. It never mutates Watchlists, Target Prices, market data, or exchange
+rates. Composed stocks preserve the symbol order stored in the Watchlist,
+regardless of the order market data is returned in.
+
+Derived values produced by this query, per stock, include:
 
 * market cap in billions USD;
 * dividend yield;
-* distance to target;
-* investment factor;
-* savings amount.
+* distance to target.
+
+Investment factor and savings amount are explicitly NOT part of this
+per-Watchlist query. They belong to the separate, user-triggered investment-
+allocation workflow described in §22, which operates on the already-composed
+stocks rather than being computed as part of loading a Watchlist.
 
 ---
 
@@ -738,6 +746,16 @@ If exchange-rate data cannot be retrieved:
 * data not requiring FX conversion may still be displayed;
 * derived values requiring conversion may be unavailable;
 * the UI shall display an understandable indication that currency conversion is currently unavailable.
+
+Specifically, when the FX provider fails globally, stocks whose market
+capitalization is already in USD remain calculable (USD -> USD requires no
+external rate), while non-USD market caps become unavailable. Other
+Yahoo/Target-Price-derived fields (price, currency, dividend yield, distance
+to target) remain available regardless of FX provider status. The composed
+query result carries an explicit warning/status distinguishing "the FX
+provider failed globally" from "an individual market cap is unavailable",
+so the UI indication above is driven by real query-level state rather than
+being inferred solely on the client.
 
 ---
 
