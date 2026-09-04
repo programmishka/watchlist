@@ -1253,6 +1253,16 @@ Watchlist deletion requires confirmation. The UI uses a native `window.confirm()
 
 A single derived "management busy" flag in `+page.svelte` — true while the active Watchlist content is loading, or a create/delete mutation is in flight — disables the create input/button, the delete button, and the tab strip together. This reuses the existing tab-disabling mechanism from §26.1 rather than introducing a generic request queue or separate concurrency-control abstraction.
 
+### 26.3 Stock Management UI (TASK-020)
+
+Adding and removing stocks on the active Watchlist follows the same shell pattern as §26.1/§26.2 rather than introducing a new state-management layer. `src/lib/client/watchlistApi.ts` gains `addStock(watchlistId, symbol)` (`POST /api/watchlists/{watchlistId}/stocks`) and `removeStock(watchlistId, symbol)` (`DELETE /api/watchlists/{watchlistId}/stocks/{symbol}`, with the symbol path segment `encodeURIComponent`-encoded); `src/lib/client/watchlistShell.ts` gains `addStockToActiveWatchlist` and `removeStockFromActiveWatchlist`.
+
+Both mutation endpoints already return the complete updated composed Watchlist (§24.1), so both shell functions replace `activeView` directly from the mutation response and never issue a follow-up `GET /api/watchlists/{watchlistId}` — including when removal empties the Watchlist (`stocks = []`), which the existing empty-Watchlist UI (§12.4) already renders once `activeView` is replaced. A failed add or remove leaves the previous `activeView` untouched; a failed add additionally preserves the entered symbol input so the user can correct or retry it. `addStockToActiveWatchlist` refuses an empty/whitespace-only symbol before calling the API, trimming the symbol it does send; it performs no case normalization, canonicalization, or Yahoo-specific validation client-side — that remains entirely server-owned (§12.1).
+
+Stock removal requires no confirmation, unlike Watchlist deletion (§11.2) — it is easily reversible (re-adding the symbol) and does not touch Target Price or broader Watchlist structure. Removing a stock never invokes any Target Price endpoint; Target Price persistence is untouched by Watchlist-membership mutation (§12.3), so a symbol removed and later re-added is composed with its existing Target Price again.
+
+`WatchlistTable.svelte` gains a final `Delete` column and an `onRemove(symbol)` callback prop plus a `busy` prop; it remains presentational and still performs no API calls or knowledge of the active Watchlist ID. `+page.svelte` extends the existing `managementBusy` flag (§26.2) to also cover an in-flight stock mutation, so a stock add/remove disables the Watchlist create/delete controls and the tab strip, and conversely tab switching or Watchlist create/delete disables the add-stock form and row-removal buttons — reusing the single-busy-flag strategy rather than a generic request queue.
+
 ---
 
 ## 27. Testing Strategy

@@ -125,3 +125,50 @@ export async function mockDeleteActiveWatchlist(
 	});
 	return { calls };
 }
+
+/** Mocks `POST /api/watchlists/{watchlistId}/stocks` and records every requested `symbol`. */
+export async function mockAddStock(
+	page: Page,
+	watchlistId: string,
+	handler: (symbol: string) => WatchlistView | JsonResponse
+): Promise<RouteCallRecorder> {
+	const calls: string[] = [];
+	await page.route(
+		new RegExp(`/api/watchlists/${escapeForRegExp(watchlistId)}/stocks$`),
+		async (route) => {
+			if (route.request().method() !== 'POST') {
+				await route.fallback();
+				return;
+			}
+			const { symbol } = route.request().postDataJSON() as { symbol: string };
+			calls.push(symbol);
+			const { status, body } = toJsonResponse(handler(symbol), 200);
+			await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+		}
+	);
+	return { calls };
+}
+
+/** Mocks `DELETE /api/watchlists/{watchlistId}/stocks/{symbol}` and records every requested (decoded) `symbol`. */
+export async function mockRemoveStock(
+	page: Page,
+	watchlistId: string,
+	handler: (symbol: string) => WatchlistView | JsonResponse
+): Promise<RouteCallRecorder> {
+	const calls: string[] = [];
+	await page.route(
+		new RegExp(`/api/watchlists/${escapeForRegExp(watchlistId)}/stocks/[^/]+$`),
+		async (route) => {
+			if (route.request().method() !== 'DELETE') {
+				await route.fallback();
+				return;
+			}
+			const url = new URL(route.request().url());
+			const symbol = decodeURIComponent(url.pathname.split('/').pop() ?? '');
+			calls.push(symbol);
+			const { status, body } = toJsonResponse(handler(symbol), 200);
+			await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+		}
+	);
+	return { calls };
+}

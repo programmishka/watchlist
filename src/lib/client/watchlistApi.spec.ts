@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+	addStock,
 	createWatchlist,
 	deleteActiveWatchlist,
 	loadWatchlist,
 	loadWatchlists,
+	removeStock,
 	selectActiveWatchlist,
 	WatchlistApiError
 } from './watchlistApi';
@@ -179,5 +181,109 @@ describe('deleteActiveWatchlist', () => {
 		);
 
 		await expect(deleteActiveWatchlist()).rejects.toBeInstanceOf(WatchlistApiError);
+	});
+});
+
+describe('addStock', () => {
+	it('issues a POST to /api/watchlists/{watchlistId}/stocks with the symbol and parses the composed watchlist', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, {
+				id: 'wl-1',
+				name: 'Main',
+				stocks: [{ symbol: 'AAPL', distanceToTarget: 0, dividendYield: 0 }],
+				warnings: []
+			})
+		);
+
+		const result = await addStock('wl-1', 'AAPL');
+
+		expect(fetch).toHaveBeenCalledWith('/api/watchlists/wl-1/stocks', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ symbol: 'AAPL' })
+		});
+		expect(result.stocks).toEqual([{ symbol: 'AAPL', distanceToTarget: 0, dividendYield: 0 }]);
+	});
+
+	it('URL-encodes the watchlist id', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, { id: 'a/b', name: 'Main', stocks: [], warnings: [] })
+		);
+
+		await addStock('a/b', 'AAPL');
+
+		expect(fetch).toHaveBeenCalledWith(
+			'/api/watchlists/a%2Fb/stocks',
+			expect.objectContaining({ method: 'POST' })
+		);
+	});
+
+	it('throws a WatchlistApiError with the stable code/message/status when the symbol is unknown', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(422, {
+				error: { code: 'UNKNOWN_STOCK_SYMBOL', message: 'The symbol could not be found.' }
+			})
+		);
+
+		await expect(addStock('wl-1', 'BOGUS')).rejects.toMatchObject({
+			name: 'WatchlistApiError',
+			code: 'UNKNOWN_STOCK_SYMBOL',
+			message: 'The symbol could not be found.',
+			status: 422
+		});
+	});
+});
+
+describe('removeStock', () => {
+	it('issues a DELETE to /api/watchlists/{watchlistId}/stocks/{symbol} with no body and parses the composed watchlist', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, { id: 'wl-1', name: 'Main', stocks: [], warnings: [] })
+		);
+
+		const result = await removeStock('wl-1', 'AAPL');
+
+		expect(fetch).toHaveBeenCalledWith('/api/watchlists/wl-1/stocks/AAPL', { method: 'DELETE' });
+		expect(result).toEqual({ id: 'wl-1', name: 'Main', stocks: [], warnings: [] });
+	});
+
+	it('URL-encodes a punctuated symbol', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, { id: 'wl-1', name: 'Main', stocks: [], warnings: [] })
+		);
+
+		await removeStock('wl-1', 'HEXA-B.ST');
+
+		expect(fetch).toHaveBeenCalledWith('/api/watchlists/wl-1/stocks/HEXA-B.ST', {
+			method: 'DELETE'
+		});
+	});
+
+	it('URL-encodes a symbol containing URL-significant characters', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, { id: 'wl-1', name: 'Main', stocks: [], warnings: [] })
+		);
+
+		await removeStock('wl-1', 'A/B C');
+
+		expect(fetch).toHaveBeenCalledWith(
+			`/api/watchlists/wl-1/stocks/${encodeURIComponent('A/B C')}`,
+			{
+				method: 'DELETE'
+			}
+		);
+	});
+
+	it('throws a WatchlistApiError with the stable code/message/status when the symbol is not found', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(404, {
+				error: { code: 'SYMBOL_NOT_FOUND', message: 'The symbol is not in this watchlist.' }
+			})
+		);
+
+		await expect(removeStock('wl-1', 'AAPL')).rejects.toMatchObject({
+			name: 'WatchlistApiError',
+			code: 'SYMBOL_NOT_FOUND',
+			status: 404
+		});
 	});
 });

@@ -12,7 +12,8 @@ const EXPECTED_COLUMNS = [
 	'Div',
 	'Currency',
 	'Target Price',
-	'Distance to Target'
+	'Distance to Target',
+	'Delete'
 ];
 
 async function mockSingleWatchlist(page: Page, stocks: WatchlistStock[]): Promise<void> {
@@ -37,7 +38,6 @@ test.describe('Watchlist table', () => {
 		await expect(table).toBeVisible();
 		await expect(table.getByRole('columnheader')).toHaveText(EXPECTED_COLUMNS);
 		await expect(page.getByRole('columnheader', { name: 'Savings Amount' })).toHaveCount(0);
-		await expect(page.getByRole('columnheader', { name: 'Delete' })).toHaveCount(0);
 	});
 
 	test('renders representative rows in the order returned by the server', async ({ page }) => {

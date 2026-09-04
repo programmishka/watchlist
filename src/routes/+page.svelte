@@ -9,10 +9,12 @@
 		WatchlistsMetadataResponse
 	} from '$lib/client/watchlistApi';
 	import {
+		addStockToActiveWatchlist,
 		createWatchlistAndActivate,
 		defaultWatchlistShellApi,
 		deleteActiveWatchlistAndTransition,
 		loadInitialWatchlists,
+		removeStockFromActiveWatchlist,
 		switchActiveWatchlist
 	} from '$lib/client/watchlistShell';
 
@@ -37,12 +39,20 @@
 	let deleteStatus = $state<'idle' | 'deleting'>('idle');
 	let deleteError = $state<WatchlistApiError | undefined>(undefined);
 
+	let newStockSymbol = $state('');
+	let stockMutationBusy = $state(false);
+	let stockMutationError = $state<WatchlistApiError | undefined>(undefined);
+
 	// Any in-flight mutation or content load blocks other management actions
 	// so responses can't resolve out of order and clobber a newer selection.
 	let managementBusy = $derived(
-		activeViewStatus === 'loading' || createStatus === 'creating' || deleteStatus === 'deleting'
+		activeViewStatus === 'loading' ||
+			createStatus === 'creating' ||
+			deleteStatus === 'deleting' ||
+			stockMutationBusy
 	);
 	let createDisabled = $derived(newWatchlistName.trim().length === 0 || managementBusy);
+	let addStockDisabled = $derived(newStockSymbol.trim().length === 0 || managementBusy);
 	let activeWatchlistName = $derived(
 		watchlists.find((watchlist) => watchlist.id === activeWatchlistId)?.name
 	);
@@ -193,6 +203,50 @@
 			}
 		});
 	}
+
+	function handleAddStockSubmit(event: SubmitEvent) {
+		event.preventDefault();
+		if (!activeWatchlistId || addStockDisabled) {
+			return;
+		}
+
+		addStockToActiveWatchlist(defaultWatchlistShellApi, activeWatchlistId, newStockSymbol, {
+			onAdding: () => {
+				stockMutationBusy = true;
+				stockMutationError = undefined;
+			},
+			onAdded: (view) => {
+				activeView = view;
+				newStockSymbol = '';
+				stockMutationBusy = false;
+			},
+			onAddFailed: (error) => {
+				stockMutationBusy = false;
+				stockMutationError = error;
+			}
+		});
+	}
+
+	function handleRemoveStock(symbol: string) {
+		if (!activeWatchlistId || managementBusy) {
+			return;
+		}
+
+		removeStockFromActiveWatchlist(defaultWatchlistShellApi, activeWatchlistId, symbol, {
+			onRemoving: () => {
+				stockMutationBusy = true;
+				stockMutationError = undefined;
+			},
+			onRemoved: (view) => {
+				activeView = view;
+				stockMutationBusy = false;
+			},
+			onRemoveFailed: (error) => {
+				stockMutationBusy = false;
+				stockMutationError = error;
+			}
+		});
+	}
 </script>
 
 <div class="page">
@@ -269,6 +323,33 @@
 			<p class="status">No watchlist has been created yet.</p>
 		{:else}
 			<div class="content">
+				{#if activeWatchlistId}
+					<form class="add-stock-form" onsubmit={handleAddStockSubmit}>
+						<label class="add-stock-label" for="new-stock-symbol">Stock symbol</label>
+						<input
+							id="new-stock-symbol"
+							class="add-stock-input"
+							type="text"
+							bind:value={newStockSymbol}
+							disabled={managementBusy}
+							autocomplete="off"
+						/>
+						<button
+							type="submit"
+							class="add-stock-button"
+							aria-label="Add stock"
+							aria-busy={stockMutationBusy}
+							disabled={addStockDisabled}
+						>
+							+
+						</button>
+					</form>
+
+					{#if stockMutationError}
+						<p class="status error" role="alert">{stockMutationError.message}</p>
+					{/if}
+				{/if}
+
 				{#if activeViewStatus === 'loading'}
 					<p class="status">Loading watchlist…</p>
 				{:else if activeViewStatus === 'error'}
@@ -282,7 +363,11 @@
 						<p class="status">This watchlist is empty.</p>
 					{:else}
 						<h2>{activeView.name}</h2>
-						<WatchlistTable stocks={activeView.stocks} />
+						<WatchlistTable
+							stocks={activeView.stocks}
+							busy={managementBusy}
+							onRemove={handleRemoveStock}
+						/>
 					{/if}
 				{/if}
 			</div>
@@ -308,6 +393,46 @@
 
 	.content {
 		margin-top: 1rem;
+	}
+
+	.add-stock-form {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.add-stock-label {
+		font-size: 0.9rem;
+		color: #444;
+	}
+
+	.add-stock-input {
+		flex: 1 1 12rem;
+		min-width: 0;
+		padding: 0.5rem 0.6rem;
+		border: 1px solid #b8b8b8;
+		border-radius: 4px;
+		font: inherit;
+	}
+
+	.add-stock-button {
+		flex: 0 0 auto;
+		min-width: 2.5rem;
+		padding: 0.5rem 0.9rem;
+		border: 1px solid #1a5fb4;
+		border-radius: 4px;
+		background: #1a5fb4;
+		color: #fff;
+		font: inherit;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.add-stock-button:disabled {
+		cursor: default;
+		opacity: 0.6;
 	}
 
 	.management {

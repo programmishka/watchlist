@@ -5,10 +5,12 @@ import {
 	type WatchlistsMetadataResponse
 } from './watchlistApi';
 import {
+	addStockToActiveWatchlist,
 	chooseInitialActiveWatchlistId,
 	createWatchlistAndActivate,
 	deleteActiveWatchlistAndTransition,
 	loadInitialWatchlists,
+	removeStockFromActiveWatchlist,
 	switchActiveWatchlist,
 	type WatchlistShellApi
 } from './watchlistShell';
@@ -35,6 +37,8 @@ function fakeApi(overrides?: Partial<WatchlistShellApi>): WatchlistShellApi {
 		loadWatchlist: vi.fn(),
 		createWatchlist: vi.fn(),
 		deleteActiveWatchlist: vi.fn(),
+		addStock: vi.fn(),
+		removeStock: vi.fn(),
 		...overrides
 	};
 }
@@ -421,5 +425,125 @@ describe('deleteActiveWatchlistAndTransition', () => {
 
 		expect(onDeleted).toHaveBeenCalledWith(response);
 		expect(onActiveWatchlistError).toHaveBeenCalledWith(error);
+	});
+});
+
+describe('addStockToActiveWatchlist', () => {
+	function addHandlers() {
+		const calls: string[] = [];
+		return {
+			calls,
+			handlers: {
+				onAdding: () => calls.push('adding'),
+				onAddFailed: () => calls.push('addFailed'),
+				onAdded: () => calls.push('added')
+			}
+		};
+	}
+
+	it('does not call the API for an empty or whitespace-only symbol', async () => {
+		const api = fakeApi();
+		const { calls, handlers } = addHandlers();
+
+		await addStockToActiveWatchlist(api, 'wl-1', '   ', handlers);
+
+		expect(api.addStock).not.toHaveBeenCalled();
+		expect(calls).toEqual([]);
+	});
+
+	it('sends the trimmed symbol and replaces activeView with the mutation response, with no follow-up GET', async () => {
+		const updatedView = view('wl-1');
+		const api = fakeApi({ addStock: vi.fn().mockResolvedValue(updatedView) });
+		const { calls, handlers } = addHandlers();
+
+		await addStockToActiveWatchlist(api, 'wl-1', '  AAPL  ', {
+			...handlers,
+			onAdded: (result) => {
+				calls.push('added');
+				expect(result).toBe(updatedView);
+			}
+		});
+
+		expect(api.addStock).toHaveBeenCalledWith('wl-1', 'AAPL');
+		expect(api.loadWatchlist).not.toHaveBeenCalled();
+		expect(calls).toEqual(['adding', 'added']);
+	});
+
+	it('reports an add failure without touching the previous active view', async () => {
+		const error = new WatchlistApiError('DUPLICATE_SYMBOL', 'already exists', 409);
+		const api = fakeApi({ addStock: vi.fn().mockRejectedValue(error) });
+		const onAddFailed = vi.fn();
+
+		await addStockToActiveWatchlist(api, 'wl-1', 'AAPL', {
+			onAdding: () => {},
+			onAddFailed,
+			onAdded: () => {
+				throw new Error('should not be called');
+			}
+		});
+
+		expect(onAddFailed).toHaveBeenCalledWith(error);
+	});
+});
+
+describe('removeStockFromActiveWatchlist', () => {
+	function removeHandlers() {
+		const calls: string[] = [];
+		return {
+			calls,
+			handlers: {
+				onRemoving: () => calls.push('removing'),
+				onRemoveFailed: () => calls.push('removeFailed'),
+				onRemoved: () => calls.push('removed')
+			}
+		};
+	}
+
+	it('replaces activeView directly with the mutation response, with no follow-up GET', async () => {
+		const updatedView = view('wl-1');
+		const api = fakeApi({ removeStock: vi.fn().mockResolvedValue(updatedView) });
+		const { calls, handlers } = removeHandlers();
+
+		await removeStockFromActiveWatchlist(api, 'wl-1', 'AAPL', {
+			...handlers,
+			onRemoved: (result) => {
+				calls.push('removed');
+				expect(result).toBe(updatedView);
+			}
+		});
+
+		expect(api.removeStock).toHaveBeenCalledWith('wl-1', 'AAPL');
+		expect(api.loadWatchlist).not.toHaveBeenCalled();
+		expect(calls).toEqual(['removing', 'removed']);
+	});
+
+	it('becomes the new activeView when the removed stock was the final row', async () => {
+		const emptyView: WatchlistView = { id: 'wl-1', name: 'Main', stocks: [], warnings: [] };
+		const api = fakeApi({ removeStock: vi.fn().mockResolvedValue(emptyView) });
+		const onRemoved = vi.fn();
+
+		await removeStockFromActiveWatchlist(api, 'wl-1', 'AAPL', {
+			onRemoving: () => {},
+			onRemoveFailed: () => {},
+			onRemoved
+		});
+
+		expect(onRemoved).toHaveBeenCalledWith(emptyView);
+	});
+
+	it('reports a remove failure without touching the previous active view', async () => {
+		const error = new WatchlistApiError('SYMBOL_NOT_FOUND', 'gone', 404);
+		const api = fakeApi({ removeStock: vi.fn().mockRejectedValue(error) });
+		const onRemoveFailed = vi.fn();
+
+		await removeStockFromActiveWatchlist(api, 'wl-1', 'AAPL', {
+			onRemoving: () => {},
+			onRemoveFailed,
+			onRemoved: () => {
+				throw new Error('should not be called');
+			}
+		});
+
+		expect(onRemoveFailed).toHaveBeenCalledWith(error);
 	});
 });

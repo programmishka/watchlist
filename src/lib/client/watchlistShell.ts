@@ -1,8 +1,10 @@
 import {
+	addStock,
 	createWatchlist,
 	deleteActiveWatchlist,
 	loadWatchlist,
 	loadWatchlists,
+	removeStock,
 	selectActiveWatchlist,
 	WatchlistApiError,
 	type WatchlistsMetadataResponse,
@@ -15,6 +17,8 @@ export interface WatchlistShellApi {
 	loadWatchlist: typeof loadWatchlist;
 	createWatchlist: typeof createWatchlist;
 	deleteActiveWatchlist: typeof deleteActiveWatchlist;
+	addStock: typeof addStock;
+	removeStock: typeof removeStock;
 }
 
 export const defaultWatchlistShellApi: WatchlistShellApi = {
@@ -22,7 +26,9 @@ export const defaultWatchlistShellApi: WatchlistShellApi = {
 	selectActiveWatchlist,
 	loadWatchlist,
 	createWatchlist,
-	deleteActiveWatchlist
+	deleteActiveWatchlist,
+	addStock,
+	removeStock
 };
 
 function toWatchlistApiError(error: unknown): WatchlistApiError {
@@ -230,5 +236,67 @@ export async function deleteActiveWatchlistAndTransition(
 		handlers.onActiveWatchlistLoaded(view);
 	} catch (error) {
 		handlers.onActiveWatchlistError(toWatchlistApiError(error));
+	}
+}
+
+export interface AddStockHandlers {
+	onAdding: () => void;
+	onAddFailed: (error: WatchlistApiError) => void;
+	onAdded: (view: WatchlistView) => void;
+}
+
+/**
+ * Implements TASK-020 §1-14: sends the trimmed symbol and, on success,
+ * replaces `activeView` directly from the mutation response with no
+ * follow-up composed-Watchlist GET. A blank/whitespace-only symbol is
+ * refused before any request is sent, and a failure leaves the previous
+ * active view untouched so the caller can preserve the entered symbol.
+ */
+export async function addStockToActiveWatchlist(
+	api: WatchlistShellApi,
+	watchlistId: string,
+	symbol: string,
+	handlers: AddStockHandlers
+): Promise<void> {
+	const trimmedSymbol = symbol.trim();
+	if (!trimmedSymbol) {
+		return;
+	}
+
+	handlers.onAdding();
+
+	try {
+		const view = await api.addStock(watchlistId, trimmedSymbol);
+		handlers.onAdded(view);
+	} catch (error) {
+		handlers.onAddFailed(toWatchlistApiError(error));
+	}
+}
+
+export interface RemoveStockHandlers {
+	onRemoving: () => void;
+	onRemoveFailed: (error: WatchlistApiError) => void;
+	onRemoved: (view: WatchlistView) => void;
+}
+
+/**
+ * Implements TASK-020 §20-31: removes a stock from the given Watchlist and,
+ * on success, replaces `activeView` directly from the mutation response
+ * (including the `stocks = []` case) with no follow-up composed-Watchlist
+ * GET. A failure leaves the previous active view untouched.
+ */
+export async function removeStockFromActiveWatchlist(
+	api: WatchlistShellApi,
+	watchlistId: string,
+	symbol: string,
+	handlers: RemoveStockHandlers
+): Promise<void> {
+	handlers.onRemoving();
+
+	try {
+		const view = await api.removeStock(watchlistId, symbol);
+		handlers.onRemoved(view);
+	} catch (error) {
+		handlers.onRemoveFailed(toWatchlistApiError(error));
 	}
 }

@@ -4,9 +4,11 @@
 
 	interface Props {
 		stocks: WatchlistStock[];
+		busy?: boolean;
+		onRemove: (symbol: string) => void;
 	}
 
-	let { stocks }: Props = $props();
+	let { stocks, busy = false, onRemove }: Props = $props();
 </script>
 
 <div class="table-container">
@@ -21,6 +23,7 @@
 				<th scope="col">Currency</th>
 				<th scope="col" class="numeric">Target Price</th>
 				<th scope="col" class="numeric">Distance to Target</th>
+				<th scope="col">Delete</th>
 			</tr>
 		</thead>
 		<tbody>
@@ -34,6 +37,18 @@
 					<td>{stock.currency ?? MISSING_VALUE_PLACEHOLDER}</td>
 					<td class="numeric">{formatNumber(stock.targetPrice)}</td>
 					<td class="numeric">{formatPercentage(stock.distanceToTarget)}</td>
+					<td>
+						<button
+							type="button"
+							class="remove-button"
+							aria-label={`Remove ${stock.symbol}`}
+							aria-busy={busy}
+							disabled={busy}
+							onclick={() => onRemove(stock.symbol)}
+						>
+							Delete
+						</button>
+					</td>
 				</tr>
 			{/each}
 		</tbody>
@@ -76,5 +91,20 @@
 	.numeric {
 		text-align: right;
 		font-variant-numeric: tabular-nums;
+	}
+
+	.remove-button {
+		padding: 0.35rem 0.6rem;
+		border: 1px solid #b3261e;
+		border-radius: 4px;
+		background: #fff;
+		color: #b3261e;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.remove-button:disabled {
+		cursor: default;
+		opacity: 0.5;
 	}
 </style>

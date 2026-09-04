@@ -98,3 +98,18 @@ export function deleteActiveWatchlist(): Promise<WatchlistsMetadataResponse> {
 		method: 'DELETE'
 	});
 }
+
+export function addStock(watchlistId: string, symbol: string): Promise<WatchlistView> {
+	return requestJson<WatchlistView>(`/api/watchlists/${encodeURIComponent(watchlistId)}/stocks`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ symbol })
+	});
+}
+
+export function removeStock(watchlistId: string, symbol: string): Promise<WatchlistView> {
+	return requestJson<WatchlistView>(
+		`/api/watchlists/${encodeURIComponent(watchlistId)}/stocks/${encodeURIComponent(symbol)}`,
+		{ method: 'DELETE' }
+	);
+}
