@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { InvalidTotalSavingsError } from '../domain/investmentAllocation';
 import { MarketDataProviderError } from '../market-data/MarketDataProvider';
 import { PersistenceError } from '../persistence/PersistenceError';
 import {
@@ -45,6 +46,9 @@ export function mapErrorToResponse(error: unknown): Response {
 	}
 	if (error instanceof InvalidTargetPriceError) {
 		return errorResponse(400, 'INVALID_TARGET_PRICE', 'The target price is invalid.');
+	}
+	if (error instanceof InvalidTotalSavingsError) {
+		return errorResponse(400, 'INVALID_TOTAL_SAVINGS', 'The total savings amount is invalid.');
 	}
 	if (error instanceof WatchlistNotFoundError) {
 		return errorResponse(404, 'WATCHLIST_NOT_FOUND', 'The watchlist does not exist.');

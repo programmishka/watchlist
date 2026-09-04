@@ -2,6 +2,7 @@ import { FrankfurterAdapter } from '../exchange-rates/FrankfurterAdapter';
 import type { ExchangeRateProvider } from '../exchange-rates/ExchangeRateProvider';
 import { YahooFinanceAdapter } from '../market-data/YahooFinanceAdapter';
 import type { MarketDataProvider } from '../market-data/MarketDataProvider';
+import { InvestmentAllocationService } from '../investment-allocation/InvestmentAllocationService';
 import { CloudflareKvTargetPriceRepository } from '../persistence/CloudflareKvTargetPriceRepository';
 import { CloudflareKvWatchlistRepository } from '../persistence/CloudflareKvWatchlistRepository';
 import { TargetPriceService } from '../target-price/TargetPriceService';
@@ -24,6 +25,7 @@ export interface ApplicationServices {
 	targetPriceService: TargetPriceService;
 	addStockToWatchlistService: AddStockToWatchlistService;
 	watchlistQueryService: WatchlistQueryService;
+	investmentAllocationService: InvestmentAllocationService;
 	/** Exposed directly for the Target Price route's post-save distance refresh (TASK-013 §18/§19). */
 	marketDataProvider: MarketDataProvider;
 }
@@ -57,12 +59,17 @@ export function createApplicationServices(platform: App.Platform | undefined): A
 		marketDataProvider,
 		exchangeRateProvider
 	);
+	// Reuses the same watchlistQueryService instance above — no second
+	// WatchlistQueryService/repository/provider graph is constructed solely
+	// for investment allocation (TASK-015 §6).
+	const investmentAllocationService = new InvestmentAllocationService(watchlistQueryService);
 
 	return {
 		watchlistService,
 		targetPriceService,
 		addStockToWatchlistService,
 		watchlistQueryService,
+		investmentAllocationService,
 		marketDataProvider
 	};
 }

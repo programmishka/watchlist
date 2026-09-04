@@ -1120,13 +1120,12 @@ GET    /api/watchlists/{watchlistId}
 POST   /api/watchlists/{watchlistId}/stocks
 DELETE /api/watchlists/{watchlistId}/stocks/{symbol}
 PUT    /api/target-prices/{symbol}
+POST   /api/watchlists/{watchlistId}/investment-allocation
 ```
 
 There is intentionally no `GET /api/target-prices` or `GET /api/target-prices/{symbol}`. Target Prices are only ever observed as part of a composed Watchlist (`GET /api/watchlists/{watchlistId}`); the Target Price service otherwise remains an internal application capability.
 
 Mutation endpoints return the resulting UI-useful state (updated Watchlist metadata, or the updated composed Watchlist) so the client does not need an immediate follow-up `GET`.
-
-An investment-allocation endpoint is a future addition and is not part of this API.
 
 ### 24.2 Authentication
 
@@ -1140,7 +1139,7 @@ Errors use a stable JSON shape independent of internal exception class names:
 { "error": { "code": "DUPLICATE_SYMBOL", "message": "The symbol already exists in this watchlist." } }
 ```
 
-Supported codes: `UNAUTHENTICATED`, `INVALID_REQUEST`, `WATCHLIST_NOT_FOUND`, `NO_ACTIVE_WATCHLIST`, `INVALID_WATCHLIST_NAME`, `INVALID_SYMBOL`, `UNKNOWN_STOCK_SYMBOL`, `DUPLICATE_SYMBOL`, `SYMBOL_NOT_FOUND`, `INVALID_TARGET_PRICE`, `MARKET_DATA_UNAVAILABLE`, `PERSISTENCE_ERROR`, `INTERNAL_ERROR`. Business/domain/provider exception classes remain independent of HTTP; one small server-side mapping helper centralizes the translation to status + code + message, so routes never expose raw Yahoo/Frankfurter/Cloudflare errors or reproduce this mapping themselves.
+Supported codes: `UNAUTHENTICATED`, `INVALID_REQUEST`, `WATCHLIST_NOT_FOUND`, `NO_ACTIVE_WATCHLIST`, `INVALID_WATCHLIST_NAME`, `INVALID_SYMBOL`, `UNKNOWN_STOCK_SYMBOL`, `DUPLICATE_SYMBOL`, `SYMBOL_NOT_FOUND`, `INVALID_TARGET_PRICE`, `INVALID_TOTAL_SAVINGS`, `MARKET_DATA_UNAVAILABLE`, `PERSISTENCE_ERROR`, `INTERNAL_ERROR`. Business/domain/provider exception classes remain independent of HTTP; one small server-side mapping helper centralizes the translation to status + code + message, so routes never expose raw Yahoo/Frankfurter/Cloudflare errors or reproduce this mapping themselves.
 
 Non-fatal degraded conditions (e.g. the FX provider being globally unavailable, or a post-save market-data refresh failing) are represented as warnings on an otherwise-successful response, using the same stable-code principle: `FX_PROVIDER_UNAVAILABLE`, `MARKET_DATA_UNAVAILABLE`.
 
@@ -1155,6 +1154,14 @@ Concrete infrastructure (Cloudflare KV repositories, the Yahoo adapter, the Fran
 ### 24.6 Numeric Representation
 
 API numeric values (`price`, `targetPrice`, `distanceToTarget`, `dividendYield`, `marketCapBillionsUsd`) are plain JSON numbers, never locale-formatted strings. Locale-specific parsing and display formatting belong to the client.
+
+### 24.7 Investment Allocation Endpoint
+
+`POST /api/watchlists/{watchlistId}/investment-allocation` requires authentication like every other endpoint. The request body carries `totalSavings`, a non-negative whole-Euro JSON number; zero is valid. An invalid `totalSavings` is rejected with `400 INVALID_TOTAL_SAVINGS` before the request composes application services or contacts Yahoo/Frankfurter, avoiding unnecessary provider work.
+
+The allocation itself is calculated entirely server-side. The response contains `totalSavings`, `invested`, and an `allocations` array of per-symbol `factor` and `savingsAmount` values. The result is computed on demand and is not persisted; it is not recalculated automatically and only reflects the Watchlist state at the moment of the request.
+
+Market-data unavailability prevents the allocation entirely (the endpoint fails rather than returning a partial result), while an FX-provider failure does not — this is inherited unchanged from the underlying Investment Allocation domain service and is not re-implemented at the HTTP layer.
 
 ---
 

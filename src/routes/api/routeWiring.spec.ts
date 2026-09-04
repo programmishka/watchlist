@@ -5,6 +5,7 @@ import { GET as watchlistGet } from './watchlists/[watchlistId]/+server';
 import { DELETE as stockDelete } from './watchlists/[watchlistId]/stocks/[symbol]/+server';
 import { POST as stocksPost } from './watchlists/[watchlistId]/stocks/+server';
 import { GET as watchlistsGet, POST as watchlistsPost } from './watchlists/+server';
+import { POST as investmentAllocationPost } from './watchlists/[watchlistId]/investment-allocation/+server';
 import { PUT as targetPricePut } from './target-prices/[symbol]/+server';
 
 class FakeKv {
@@ -88,6 +89,16 @@ describe('API route authentication wiring (real +server.ts handlers)', () => {
 						request: jsonRequest({ targetPrice: 100 })
 					})
 				)
+		],
+		[
+			'POST /api/watchlists/[id]/investment-allocation',
+			() =>
+				investmentAllocationPost(
+					unauthenticatedEvent({
+						params: { watchlistId: 'wl-1' },
+						request: jsonRequest({ totalSavings: 1000 })
+					})
+				)
 		]
 	])('%s returns 401 UNAUTHENTICATED with no authenticated user', async (_label, callRoute) => {
 		await expectApiError(await callRoute(), 401, 'UNAUTHENTICATED');
@@ -133,9 +144,38 @@ describe('API route malformed-JSON handling (real +server.ts handlers)', () => {
 						request: malformedRequest()
 					})
 				)
+		],
+		[
+			'POST /api/watchlists/[id]/investment-allocation',
+			() =>
+				investmentAllocationPost(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						params: { watchlistId: 'wl-1' },
+						request: malformedRequest()
+					})
+				)
 		]
 	])('%s returns 400 INVALID_REQUEST for malformed JSON', async (_label, callRoute) => {
 		await expectApiError(await callRoute(), 400, 'INVALID_REQUEST');
+	});
+});
+
+describe('POST /api/watchlists/[id]/investment-allocation early validation (real +server.ts handler)', () => {
+	const authenticatedLocals = { user: { id: 'user-1' } };
+
+	it('returns 400 INVALID_TOTAL_SAVINGS for an invalid amount without constructing application services', async () => {
+		const event = unauthenticatedEvent({
+			locals: authenticatedLocals,
+			params: { watchlistId: 'wl-1' },
+			request: jsonRequest({ totalSavings: -1 }),
+			platform: undefined
+		});
+
+		// platform is deliberately undefined: if validation happened after
+		// createApplicationServices, this would fail with 500 INTERNAL_ERROR
+		// (PlatformUnavailableError) instead of the expected 400.
+		await expectApiError(await investmentAllocationPost(event), 400, 'INVALID_TOTAL_SAVINGS');
 	});
 });
 

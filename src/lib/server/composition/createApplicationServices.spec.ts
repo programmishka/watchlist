@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvestmentAllocationService } from '../investment-allocation/InvestmentAllocationService';
 import { AddStockToWatchlistService } from '../watchlist/AddStockToWatchlistService';
 import { WatchlistQueryService } from '../watchlist/WatchlistQueryService';
 import { WatchlistService } from '../watchlist/WatchlistService';
@@ -32,6 +33,7 @@ describe('createApplicationServices', () => {
 		expect(services.targetPriceService).toBeInstanceOf(TargetPriceService);
 		expect(services.addStockToWatchlistService).toBeInstanceOf(AddStockToWatchlistService);
 		expect(services.watchlistQueryService).toBeInstanceOf(WatchlistQueryService);
+		expect(services.investmentAllocationService).toBeInstanceOf(InvestmentAllocationService);
 		expect(services.marketDataProvider).toBeDefined();
 	});
 });

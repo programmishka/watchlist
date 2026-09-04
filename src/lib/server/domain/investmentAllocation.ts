@@ -49,7 +49,13 @@ export function calculateFactorSum(factors: number[]): number {
 	return factors.reduce((sum, factor) => sum + sanitizeFactor(factor), 0);
 }
 
-function assertValidTotalSavings(totalSavings: number): void {
+/**
+ * Exported so callers (e.g. the HTTP layer) can reject an obviously invalid
+ * `totalSavings` before doing unnecessary work — the exact same rule
+ * `calculateSavingsAllocation` applies internally, not a second/conflicting
+ * one.
+ */
+export function assertValidTotalSavings(totalSavings: number): void {
 	if (!Number.isFinite(totalSavings) || !Number.isInteger(totalSavings) || totalSavings < 0) {
 		throw new InvalidTotalSavingsError(totalSavings);
 	}

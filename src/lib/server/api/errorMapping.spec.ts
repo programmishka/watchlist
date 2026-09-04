@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InvalidTotalSavingsError } from '../domain/investmentAllocation';
 import { MarketDataProviderError } from '../market-data/MarketDataProvider';
 import { PersistenceError } from '../persistence/PersistenceError';
 import {
@@ -31,6 +32,7 @@ describe('mapErrorToResponse', () => {
 		[new InvalidWatchlistSymbolError(''), 400, 'INVALID_SYMBOL'],
 		[new InvalidTargetPriceSymbolError(''), 400, 'INVALID_SYMBOL'],
 		[new InvalidTargetPriceError(-1), 400, 'INVALID_TARGET_PRICE'],
+		[new InvalidTotalSavingsError(-1), 400, 'INVALID_TOTAL_SAVINGS'],
 		[new WatchlistNotFoundError('wl-1'), 404, 'WATCHLIST_NOT_FOUND'],
 		[new SymbolNotFoundError('AAPL', 'wl-1'), 404, 'SYMBOL_NOT_FOUND'],
 		[new DuplicateSymbolError('AAPL', 'wl-1'), 409, 'DUPLICATE_SYMBOL'],
