@@ -4,9 +4,12 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
+		"clean": "node -e \"require('fs').rmSync('.svelte-kit', { recursive: true, force: true })\"",
 		"dev": "vite dev",
+		"prebuild": "npm run clean",
 		"build": "wrangler types --check && vite build",
 		"preview": "wrangler dev .svelte-kit/cloudflare/_worker.js --port 4173",
+		"precheck": "npm run clean",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "wrangler types --check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",

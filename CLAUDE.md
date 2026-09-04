@@ -132,6 +132,16 @@ Exchange-rate access follows the same principle through the application's exchan
 
 Provider implementations must be replaceable without redesigning the application's business logic.
 
+## Generated SvelteKit State
+
+Do not manually delete `.svelte-kit` as part of normal verification.
+
+The npm verification scripts clean generated SvelteKit state automatically
+where required.
+
+Use the configured npm scripts rather than manually reproducing their
+cleanup or verification steps.
+
 ## Task Completion
 
 Before considering a task complete:

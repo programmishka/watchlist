@@ -13,8 +13,7 @@
             "Bash(git diff)",
             "Bash(git diff *)",
             "Bash(git log)",
-            "Bash(git log *)",
-            "Bash(rm -rf .svelte-kit)"
+            "Bash(git log *)"
         ],
         "ask": [
             "Bash(git reset *)",
