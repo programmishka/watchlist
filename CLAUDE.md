@@ -104,6 +104,29 @@ Before completing a task, run all relevant checks that are configured in the pro
 
 Do not claim that checks passed unless they were actually executed successfully.
 
+## Browser E2E Testing
+
+Playwright (`@playwright/test`) is the project's permanent browser-level UI testing tool. Vitest remains the unit/application test framework; these are separate concerns.
+
+* User-visible behavior introduced or changed by UI tasks should be covered by persistent Playwright E2E tests under `tests/e2e/` when browser-level verification provides meaningful regression protection.
+* Do not create temporary Playwright scripts outside the repository for repeatable product behavior that belongs in the permanent E2E suite.
+* Temporary browser scripts remain acceptable for one-off diagnostics when the behavior is not itself a useful regression test, but they must be removed before task completion.
+* Not every CSS change needs a browser test. Use judgment based on meaningful user behavior.
+* Organize browser tests by user-facing concern/use case, e.g. `watchlist-tabs.spec.ts`, `watchlist-table.spec.ts`, `watchlist-management.spec.ts`, `stock-management.spec.ts`, `target-price.spec.ts`, `filtering-sorting.spec.ts`, `investment-allocation.spec.ts`. These are examples for future organization, not a required file list.
+* Normal Playwright tests must mock/intercept `/api/*` responses at the browser network boundary and must not depend on Cloudflare Access, Cloudflare KV, Yahoo Finance, or Frankfurter.
+
+When a task modifies behavior covered by the E2E suite, run:
+
+```bash
+npm run test
+npm run test:e2e
+npm run check
+npm run lint
+npm run build
+```
+
+Backend-only tasks do not necessarily need Playwright unless they change an API contract exercised by the UI.
+
 ## Security
 
 Never commit or expose:

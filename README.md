@@ -55,6 +55,34 @@ Run the unit test suite:
 npm run test
 ```
 
+## Browser E2E Tests
+
+Playwright is the project's browser-level UI testing tool. Permanent specs live under
+`tests/e2e/`, organized by user-facing concern (e.g. `watchlist-tabs.spec.ts`,
+`watchlist-table.spec.ts`).
+
+One-time browser install:
+
+```sh
+npx playwright install chromium
+```
+
+Run the suite headlessly:
+
+```sh
+npm run test:e2e
+```
+
+Or interactively:
+
+```sh
+npm run test:e2e:ui
+```
+
+`npm run test:e2e` starts the app with `npm run dev` automatically. Normal E2E tests
+mock/intercept `/api/*` responses at the browser network boundary and therefore do not
+require Cloudflare Access, Cloudflare KV, Yahoo Finance, or Frankfurter.
+
 ## Type/Svelte Checking
 
 ```sh

@@ -1282,11 +1282,23 @@ A dedicated deployed test environment is not required for the initial project.
 
 ### 27.3 End-to-End Tests
 
-Automated E2E testing is initially out of scope.
+Playwright (`@playwright/test`) is the project's browser-level UI/E2E testing framework, established by TASK-018. It is a separate concern from Vitest, which remains the unit/application test framework.
 
-Cloudflare Access, deployment, Yahoo Finance, and Frankfurter may instead be verified through a small manual deployment smoke-test procedure.
+Permanent browser specs live under `tests/e2e/`, organized by user-facing concern (e.g. `watchlist-tabs.spec.ts`, `watchlist-table.spec.ts`) rather than one large undifferentiated spec file.
 
-This decision may be revisited as the application grows.
+Normal Playwright UI tests exercise:
+
+```text
+browser UI
++
+controlled/intercepted application API responses
+```
+
+They use Playwright request routing to return deterministic responses for `/api/*` and therefore do not normally depend on Cloudflare Access, Cloudflare KV, Yahoo Finance, or Frankfurter. `npm run dev` is a sufficient runtime for this suite because every relevant `/api/*` request is intercepted in the browser before it reaches the SvelteKit server.
+
+Real `workerd`/provider verification (Cloudflare Access, KV, Yahoo Finance, Frankfurter) remains a separate, manual deployment smoke-test concern rather than part of the normal Playwright suite. This decision may be revisited as the application grows.
+
+Desktop and narrow/mobile UI behavior (tab strip, responsive table scrolling, page-level overflow) are covered by Playwright projects using distinct viewports rather than relying on a developer's local browser window dimensions.
 
 ---
 
@@ -1381,7 +1393,6 @@ The following ideas are intentionally left open:
 * more sophisticated account management;
 * watchlist sharing;
 * collaborative features;
-* automated E2E testing;
 * more advanced investment-allocation strategies;
 * dedicated mobile stock-card representation or responsive column selection.
 
