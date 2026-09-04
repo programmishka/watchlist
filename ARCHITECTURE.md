@@ -1225,6 +1225,22 @@ Server-returned data may naturally be held by the client for rendering.
 
 Holding server data in client state does not make the client responsible for deriving business values from it.
 
+### 26.1 Application Shell (TASK-016)
+
+The application is currently a single Svelte page (`src/routes/+page.svelte`) rather than a multi-route SPA. It establishes the production application shell: a title/header, a Watchlist tab strip, and an active-Watchlist content area.
+
+Watchlist metadata (`GET /api/watchlists`) and the composed active Watchlist (`GET /api/watchlists/{id}`) are loaded as two separate requests, not one combined payload. Metadata drives tab rendering; the composed Watchlist drives the content area. This keeps the tab strip renderable/interactive independently of how long the (potentially Yahoo/FX-backed) composed Watchlist query takes.
+
+Tabs are identified and keyed by Watchlist `id`, never by `name`, because Watchlist names may be duplicated (§9.2).
+
+The server remains the source of truth for the active Watchlist. Switching tabs first persists the selection (`PUT /api/watchlists/active`) and only loads the newly selected composed Watchlist after that mutation succeeds — the client never optimistically treats an unpersisted tab as active. If the `PUT` fails, the previously active tab and its already-loaded content are kept and an inline error is shown. If the `PUT` succeeds but the subsequent composed-Watchlist `GET` fails, the newly selected tab remains active (persistence already succeeded) while the content area shows a load error.
+
+Client-side Watchlist HTTP access is centralized behind a small client API module (`src/lib/client/watchlistApi.ts`), which owns endpoint URLs, HTTP methods, JSON parsing, and mapping the stable API error shape (`error.code`/`error.message`/HTTP status) into a `WatchlistApiError`. A separate, framework-agnostic orchestration module (`src/lib/client/watchlistShell.ts`) implements the initial-load and tab-switch flows described above as plain async functions over injected API calls and state-transition callbacks, independent of Svelte's reactivity so this orchestration logic is unit-testable without rendering a component. The Svelte page itself only holds UI-oriented `$state` (loading/error status, the current tab, the loaded views) and wires it to that orchestration module.
+
+Tab controls are disabled while a Watchlist load (initial or tab-switch) is in flight, which also prevents out-of-order network responses from a superseded request from overwriting newer state.
+
+Tab overflow on narrow viewports is handled with simple horizontal scrolling on the tab strip rather than a dropdown or other overflow menu. No general-purpose CSS framework or component library was introduced; layout uses native Flexbox and a responsive content-width container.
+
 ---
 
 ## 27. Testing Strategy
