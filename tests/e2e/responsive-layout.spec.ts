@@ -42,7 +42,9 @@ test.describe('Responsive layout', () => {
 			'Target Price',
 			'Distance to Target'
 		]) {
-			await expect(page.getByRole('columnheader', { name: header, exact: true })).toBeVisible();
+			await expect(
+				page.getByRole('columnheader', { name: `Sort by ${header}`, exact: true })
+			).toBeVisible();
 		}
 
 		expect(await pageOverflowsHorizontally(page)).toBe(false);

@@ -19,6 +19,12 @@
 		switchActiveWatchlist
 	} from '$lib/client/watchlistShell';
 	import { filterStocksByCompanyName, formatStockCount } from '$lib/client/watchlistFilter';
+	import {
+		sortWatchlistStocks,
+		toggleWatchlistSort,
+		type WatchlistSort,
+		type WatchlistSortColumn
+	} from '$lib/client/watchlistSort';
 	import type { TargetPriceSaveResult } from '$lib/components/TargetPriceCell.svelte';
 
 	type MetadataStatus = 'loading' | 'loaded' | 'error';
@@ -52,6 +58,10 @@
 	// the active Watchlist itself changes rather than persisted anywhere.
 	let companyNameFilter = $state('');
 
+	// UI-local table sort (TASK-023); reset at the same active-Watchlist
+	// transitions as the filter, never persisted anywhere.
+	let sort = $state<WatchlistSort | undefined>(undefined);
+
 	// Any in-flight mutation or content load blocks other management actions
 	// so responses can't resolve out of order and clobber a newer selection.
 	let managementBusy = $derived(
@@ -71,6 +81,7 @@
 	let filteredStocks = $derived(
 		activeView ? filterStocksByCompanyName(activeView.stocks, companyNameFilter) : []
 	);
+	let visibleStocks = $derived(sortWatchlistStocks(filteredStocks, sort));
 	let totalStockCount = $derived(activeView?.stocks.length ?? 0);
 	let stockCountText = $derived(
 		formatStockCount(totalStockCount, filteredStocks.length, isFiltered)
@@ -128,6 +139,7 @@
 				watchlists = response.watchlists;
 				activeWatchlistId = watchlistId;
 				companyNameFilter = '';
+				sort = undefined;
 			},
 			onActiveWatchlistLoaded: (view) => {
 				activeView = view;
@@ -163,6 +175,7 @@
 				newWatchlistName = '';
 				createStatus = 'idle';
 				companyNameFilter = '';
+				sort = undefined;
 			},
 			onActiveWatchlistLoading: () => {
 				activeViewStatus = 'loading';
@@ -204,6 +217,7 @@
 				activeWatchlistId = response.activeWatchlistId;
 				deleteStatus = 'idle';
 				companyNameFilter = '';
+				sort = undefined;
 			},
 			onNoWatchlistsRemaining: () => {
 				activeView = undefined;
@@ -247,6 +261,10 @@
 				stockMutationError = error;
 			}
 		});
+	}
+
+	function handleSort(column: WatchlistSortColumn) {
+		sort = toggleWatchlistSort(sort, column);
 	}
 
 	function handleRemoveStock(symbol: string) {
@@ -428,8 +446,10 @@
 							<p class="status">No stocks match the current filter.</p>
 						{:else}
 							<WatchlistTable
-								stocks={filteredStocks}
+								stocks={visibleStocks}
+								{sort}
 								busy={managementBusy}
+								onSort={handleSort}
 								onRemove={handleRemoveStock}
 								onSaveTargetPrice={handleSaveTargetPrice}
 							/>

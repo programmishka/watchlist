@@ -1,32 +1,66 @@
 <script lang="ts">
 	import type { WatchlistStock } from '$lib/client/watchlistApi';
 	import { formatNumber, formatPercentage, MISSING_VALUE_PLACEHOLDER } from '$lib/client/format';
+	import type { WatchlistSort, WatchlistSortColumn } from '$lib/client/watchlistSort';
 	import TargetPriceCell, {
 		type TargetPriceSaveResult
 	} from '$lib/components/TargetPriceCell.svelte';
 
 	interface Props {
 		stocks: WatchlistStock[];
+		sort?: WatchlistSort;
 		busy?: boolean;
+		onSort: (column: WatchlistSortColumn) => void;
 		onRemove: (symbol: string) => void;
 		onSaveTargetPrice: (symbol: string, targetPrice: number) => Promise<TargetPriceSaveResult>;
 	}
 
-	let { stocks, busy = false, onRemove, onSaveTargetPrice }: Props = $props();
+	let { stocks, sort, busy = false, onSort, onRemove, onSaveTargetPrice }: Props = $props();
+
+	const SORTABLE_COLUMNS: { key: WatchlistSortColumn; label: string; numeric: boolean }[] = [
+		{ key: 'symbol', label: 'Symbol', numeric: false },
+		{ key: 'name', label: 'Name', numeric: false },
+		{ key: 'marketCapBillionsUsd', label: 'Cap (USD)', numeric: true },
+		{ key: 'price', label: 'Price', numeric: true },
+		{ key: 'dividendYield', label: 'Div', numeric: true },
+		{ key: 'currency', label: 'Currency', numeric: false },
+		{ key: 'targetPrice', label: 'Target Price', numeric: true },
+		{ key: 'distanceToTarget', label: 'Distance to Target', numeric: true }
+	];
+
+	function ariaSortFor(column: WatchlistSortColumn): 'ascending' | 'descending' | 'none' {
+		if (sort?.column !== column) {
+			return 'none';
+		}
+		return sort.direction === 'asc' ? 'ascending' : 'descending';
+	}
 </script>
 
 <div class="table-container">
 	<table>
 		<thead>
 			<tr>
-				<th scope="col">Symbol</th>
-				<th scope="col">Name</th>
-				<th scope="col" class="numeric">Cap (USD)</th>
-				<th scope="col" class="numeric">Price</th>
-				<th scope="col" class="numeric">Div</th>
-				<th scope="col">Currency</th>
-				<th scope="col" class="numeric">Target Price</th>
-				<th scope="col" class="numeric">Distance to Target</th>
+				{#each SORTABLE_COLUMNS as column (column.key)}
+					<th
+						scope="col"
+						class={column.numeric ? 'numeric' : undefined}
+						aria-sort={ariaSortFor(column.key)}
+					>
+						<button
+							type="button"
+							class="sort-button"
+							aria-label={`Sort by ${column.label}`}
+							onclick={() => onSort(column.key)}
+						>
+							{column.label}
+							{#if sort?.column === column.key}
+								<span class="sort-indicator" aria-hidden="true">
+									{sort.direction === 'asc' ? '↑' : '↓'}
+								</span>
+							{/if}
+						</button>
+					</th>
+				{/each}
 				<th scope="col">Delete</th>
 			</tr>
 		</thead>
@@ -106,6 +140,31 @@
 	.numeric {
 		text-align: right;
 		font-variant-numeric: tabular-nums;
+	}
+
+	.sort-button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0;
+		border: none;
+		background: none;
+		font: inherit;
+		font-weight: 600;
+		color: inherit;
+		cursor: pointer;
+	}
+
+	.sort-button:hover {
+		text-decoration: underline;
+	}
+
+	th.numeric .sort-button {
+		justify-content: flex-end;
+	}
+
+	.sort-indicator {
+		font-size: 0.85em;
 	}
 
 	.remove-button {

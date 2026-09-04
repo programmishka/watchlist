@@ -583,9 +583,43 @@ The table contains:
 
 ### 13.1 Sorting
 
-Supported table columns may be sorted through their headers.
+All eight stock-data columns (symbol, name, market cap in billions USD,
+price, dividend yield, currency, target price, distance to target) may be
+sorted through interactive headers. The `Delete` column is not sortable.
 
-Sorting is a client-side presentation concern.
+Sorting is a client-side presentation concern operating only on the stock
+data already loaded in the browser; it performs no API request.
+
+Activation rules:
+
+* the initial table state is unsorted, showing persisted Watchlist/API
+  order;
+* the first click on a sortable header activates ascending sorting on that
+  column;
+* clicking the currently active column again toggles between ascending and
+  descending; there is no third/unsorted state once a column is active;
+* clicking a different column switches to that column, always starting
+  ascending.
+
+String columns (symbol, name, currency) compare using a locale-aware,
+case-insensitive comparison; the full symbol string is compared, without
+splitting exchange suffixes or punctuation, and currency compares the
+displayed application value (e.g. `GBp` is never converted to `GBP` for
+sorting). Numeric columns compare raw underlying values, never formatted
+display strings; non-finite numeric values are treated as missing for this
+presentation-only purpose. Missing optional values always sort last in both
+directions; `0` is a real value and never treated as missing. Sorting is
+stable, preserving the original relative order of the filtered input for
+equal sort values.
+
+Filtering happens before sorting: the pipeline is
+`activeView.stocks -> filterStocksByCompanyName -> sortWatchlistStocks ->
+visibleStocks`. Sorting never affects `totalStockCount`/`filteredStockCount`,
+which remain derived from `activeView.stocks`/`filteredStocks`. Sort state
+resets whenever the active Watchlist itself changes (tab switch, Watchlist
+creation, deletion transition) but is preserved across same-Watchlist
+mutations (Target Price update, stock add/remove), with affected rows
+repositioning to their new sorted location.
 
 ### 13.2 Filtering
 
@@ -1284,6 +1318,32 @@ Company-name filtering is a purely client-side, UI-local concern layered over th
 `+page.svelte` holds `companyNameFilter` as local `$state`, alongside `$derived` values (`filteredStocks`, `isFiltered`, `stockCountText`) computed from it and `activeView`. `WatchlistTable.svelte` continues to only receive and render the stocks it is given — it receives `filteredStocks` rather than `activeView.stocks` and owns no filtering rule itself. The filter input (labelled "Filter by company name") and the count footer are only rendered once the active Watchlist has at least one stock, matching the existing empty-Watchlist state (§12.4); when the Watchlist has stocks but none match the filter, a distinct "No stocks match the current filter." message is shown instead of either the table or the empty-Watchlist message, and the count footer (`0 of N stocks`) remains visible.
 
 `companyNameFilter` is reset to `''` at the three points where the active Watchlist itself changes — a successful tab switch, a successful Watchlist creation, and a successful Watchlist deletion/replacement transition (§26.1/§26.2) — but is left untouched by same-Watchlist mutations (stock add/remove via §26.3, Target Price save via this section), so a filter survives those and continues to apply to the updated `activeView.stocks` on the next render.
+
+### 26.6 Watchlist Table Sorting UI (TASK-023)
+
+Table sorting is a purely client-side, UI-local concern layered over
+`filteredStocks` (§26.5) — it never issues an API request and is never
+persisted, added to Watchlist metadata, or reflected in the URL.
+`src/lib/client/watchlistSort.ts` exports `sortWatchlistStocks(stocks, sort)`,
+a pure, independently unit-tested function that returns a new array (the
+input is never mutated, nor is `activeView.stocks`/`filteredStocks`) and
+implements the comparison, missing-value, and stability rules of §13.1, and
+`toggleWatchlistSort(current, column)`, a pure function implementing the
+ascending/toggle/switch-column activation rules of §13.1.
+
+`+page.svelte` holds `sort` as local `$state<WatchlistSort | undefined>`,
+alongside a `$derived` `visibleStocks = sortWatchlistStocks(filteredStocks,
+sort)` that is passed to `WatchlistTable` instead of `filteredStocks`;
+`totalStockCount`/`stockCountText` continue to derive from
+`activeView`/`filteredStocks`, unaffected by `sort`. `sort` is reset to
+`undefined` at the same three active-Watchlist transitions where
+`companyNameFilter` is reset (§26.5) — tab switch, Watchlist creation, and
+Watchlist deletion/replacement — and is otherwise left untouched, so it
+survives same-Watchlist mutations and continues to apply reactively as
+`activeView`/`filteredStocks` change (e.g. a Target Price edit moves that row
+to its new sorted position without special-case handling).
+
+`WatchlistTable.svelte` renders each sortable header as a `<th aria-sort="ascending"|"descending"|"none">` containing a `<button aria-label="Sort by {Column}">`, so the accessible name communicates the column independently of the `↑`/`↓` indicator (rendered only for the active column, `aria-hidden`). `WatchlistTable` receives `sort` and an `onSort(column)` callback as presentation-oriented props and owns no persisted sort state itself; `+page.svelte` turns `onSort` into `sort = toggleWatchlistSort(sort, column)`. The `Delete` header remains plain text with no button and no `aria-sort`.
 
 ---
 
