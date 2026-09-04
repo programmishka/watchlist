@@ -18,6 +18,7 @@
 		setTargetPriceForActiveStock,
 		switchActiveWatchlist
 	} from '$lib/client/watchlistShell';
+	import { filterStocksByCompanyName, formatStockCount } from '$lib/client/watchlistFilter';
 	import type { TargetPriceSaveResult } from '$lib/components/TargetPriceCell.svelte';
 
 	type MetadataStatus = 'loading' | 'loaded' | 'error';
@@ -47,6 +48,10 @@
 
 	let targetPriceMutationBusy = $state(false);
 
+	// UI-local filter for the active Watchlist (TASK-022 §11); reset whenever
+	// the active Watchlist itself changes rather than persisted anywhere.
+	let companyNameFilter = $state('');
+
 	// Any in-flight mutation or content load blocks other management actions
 	// so responses can't resolve out of order and clobber a newer selection.
 	let managementBusy = $derived(
@@ -60,6 +65,15 @@
 	let addStockDisabled = $derived(newStockSymbol.trim().length === 0 || managementBusy);
 	let activeWatchlistName = $derived(
 		watchlists.find((watchlist) => watchlist.id === activeWatchlistId)?.name
+	);
+
+	let isFiltered = $derived(companyNameFilter.trim().length > 0);
+	let filteredStocks = $derived(
+		activeView ? filterStocksByCompanyName(activeView.stocks, companyNameFilter) : []
+	);
+	let totalStockCount = $derived(activeView?.stocks.length ?? 0);
+	let stockCountText = $derived(
+		formatStockCount(totalStockCount, filteredStocks.length, isFiltered)
 	);
 
 	onMount(() => {
@@ -113,6 +127,7 @@
 			onSelected: (response) => {
 				watchlists = response.watchlists;
 				activeWatchlistId = watchlistId;
+				companyNameFilter = '';
 			},
 			onActiveWatchlistLoaded: (view) => {
 				activeView = view;
@@ -147,6 +162,7 @@
 				activeWatchlistId = newActiveWatchlistId;
 				newWatchlistName = '';
 				createStatus = 'idle';
+				companyNameFilter = '';
 			},
 			onActiveWatchlistLoading: () => {
 				activeViewStatus = 'loading';
@@ -187,6 +203,7 @@
 				watchlists = response.watchlists;
 				activeWatchlistId = response.activeWatchlistId;
 				deleteStatus = 'idle';
+				companyNameFilter = '';
 			},
 			onNoWatchlistsRemaining: () => {
 				activeView = undefined;
@@ -395,12 +412,30 @@
 						<p class="status">This watchlist is empty.</p>
 					{:else}
 						<h2>{activeView.name}</h2>
-						<WatchlistTable
-							stocks={activeView.stocks}
-							busy={managementBusy}
-							onRemove={handleRemoveStock}
-							onSaveTargetPrice={handleSaveTargetPrice}
-						/>
+
+						<div class="filter-row">
+							<label class="filter-label" for="company-name-filter"> Filter by company name </label>
+							<input
+								id="company-name-filter"
+								class="filter-input"
+								type="text"
+								bind:value={companyNameFilter}
+								autocomplete="off"
+							/>
+						</div>
+
+						{#if filteredStocks.length === 0}
+							<p class="status">No stocks match the current filter.</p>
+						{:else}
+							<WatchlistTable
+								stocks={filteredStocks}
+								busy={managementBusy}
+								onRemove={handleRemoveStock}
+								onSaveTargetPrice={handleSaveTargetPrice}
+							/>
+						{/if}
+
+						<p class="count">{stockCountText}</p>
 					{/if}
 				{/if}
 			</div>
@@ -551,5 +586,34 @@
 
 	.status.warning {
 		color: #8a5a00;
+	}
+
+	.filter-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.filter-label {
+		font-size: 0.9rem;
+		color: #444;
+	}
+
+	.filter-input {
+		flex: 1 1 12rem;
+		min-width: 0;
+		max-width: 20rem;
+		padding: 0.5rem 0.6rem;
+		border: 1px solid #b8b8b8;
+		border-radius: 4px;
+		font: inherit;
+	}
+
+	.count {
+		margin-top: 0.5rem;
+		color: #444;
+		font-size: 0.9rem;
 	}
 </style>

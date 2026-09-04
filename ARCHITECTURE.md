@@ -1277,6 +1277,14 @@ Because a Target Price mutation can report a successful save with an unavailable
 
 `+page.svelte` wires `TargetPriceCell`'s save callback to `setTargetPriceForActiveStock`, replacing `activeView` with the merged result on success and folding a `targetPriceMutationBusy` flag into the existing `managementBusy` flag (§26.2/§26.3), so a Target Price save temporarily disables tab switching, Watchlist create/delete, and stock add/remove — the same simple serialized-mutation strategy as TASK-019/TASK-020, rather than a per-row concurrency model. A per-row `saving` flag (owned by `TargetPriceCell`) additionally prevents a duplicate save for the same row.
 
+### 26.5 Watchlist Filtering and Counts UI (TASK-022)
+
+Company-name filtering is a purely client-side, UI-local concern layered over the already-loaded `activeView.stocks` — it never issues an API request and is never persisted, added to Watchlist metadata, or reflected in the URL. `src/lib/client/watchlistFilter.ts` exports two pure, independently unit-tested functions: `filterStocksByCompanyName(stocks, filter)`, which trims and lowercases the filter and keeps a stock only when `stock.name` (lowercased) contains it as a substring — a stock with no `name` can never match a non-empty filter, and an empty/whitespace-only filter returns the input array unchanged, preserving order — and `formatStockCount(totalCount, filteredCount, isFiltered)`, which renders the `N stock`/`N stocks` singular/plural footer text and, when filtered, the `X of N stocks` form. Neither function mutates its input.
+
+`+page.svelte` holds `companyNameFilter` as local `$state`, alongside `$derived` values (`filteredStocks`, `isFiltered`, `stockCountText`) computed from it and `activeView`. `WatchlistTable.svelte` continues to only receive and render the stocks it is given — it receives `filteredStocks` rather than `activeView.stocks` and owns no filtering rule itself. The filter input (labelled "Filter by company name") and the count footer are only rendered once the active Watchlist has at least one stock, matching the existing empty-Watchlist state (§12.4); when the Watchlist has stocks but none match the filter, a distinct "No stocks match the current filter." message is shown instead of either the table or the empty-Watchlist message, and the count footer (`0 of N stocks`) remains visible.
+
+`companyNameFilter` is reset to `''` at the three points where the active Watchlist itself changes — a successful tab switch, a successful Watchlist creation, and a successful Watchlist deletion/replacement transition (§26.1/§26.2) — but is left untouched by same-Watchlist mutations (stock add/remove via §26.3, Target Price save via this section), so a filter survives those and continues to apply to the updated `activeView.stocks` on the next render.
+
 ---
 
 ## 27. Testing Strategy
