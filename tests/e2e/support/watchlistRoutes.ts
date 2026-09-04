@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import type {
+	TargetPriceMutationResponse,
 	WatchlistsMetadataResponse,
 	WatchlistView
 } from '../../../src/lib/client/watchlistApi';
@@ -170,5 +171,30 @@ export async function mockRemoveStock(
 			await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 		}
 	);
+	return { calls };
+}
+
+export interface TargetPriceCallRecorder {
+	readonly calls: readonly { symbol: string; targetPrice: number }[];
+}
+
+/** Mocks `PUT /api/target-prices/{symbol}` and records every requested (decoded) `symbol`/`targetPrice`. */
+export async function mockSetTargetPrice(
+	page: Page,
+	handler: (symbol: string, targetPrice: number) => TargetPriceMutationResponse | JsonResponse
+): Promise<TargetPriceCallRecorder> {
+	const calls: { symbol: string; targetPrice: number }[] = [];
+	await page.route(/\/api\/target-prices\/[^/]+$/, async (route) => {
+		if (route.request().method() !== 'PUT') {
+			await route.fallback();
+			return;
+		}
+		const url = new URL(route.request().url());
+		const symbol = decodeURIComponent(url.pathname.split('/').pop() ?? '');
+		const { targetPrice } = route.request().postDataJSON() as { targetPrice: number };
+		calls.push({ symbol, targetPrice });
+		const { status, body } = toJsonResponse(handler(symbol, targetPrice), 200);
+		await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+	});
 	return { calls };
 }

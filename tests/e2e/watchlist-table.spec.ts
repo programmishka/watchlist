@@ -73,7 +73,7 @@ test.describe('Watchlist table', () => {
 		await expect(cells.nth(2)).toHaveText('—'); // market cap
 		await expect(cells.nth(3)).toHaveText('—'); // price
 		await expect(cells.nth(5)).toHaveText('—'); // currency
-		await expect(cells.nth(6)).toHaveText('100'); // target price still present
+		await expect(page.getByLabel('Target price for UNKNOWN')).toHaveValue('100'); // target price still present
 	});
 
 	test('presents dividend yield and target-price distance as percentages', async ({ page }) => {

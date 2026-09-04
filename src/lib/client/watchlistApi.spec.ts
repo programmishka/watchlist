@@ -7,6 +7,7 @@ import {
 	loadWatchlists,
 	removeStock,
 	selectActiveWatchlist,
+	setTargetPrice,
 	WatchlistApiError
 } from './watchlistApi';
 
@@ -284,6 +285,98 @@ describe('removeStock', () => {
 			name: 'WatchlistApiError',
 			code: 'SYMBOL_NOT_FOUND',
 			status: 404
+		});
+	});
+});
+
+describe('setTargetPrice', () => {
+	it('issues a PUT to /api/target-prices/{symbol} with a numeric JSON body and parses the response', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, {
+				symbol: 'AAPL',
+				targetPrice: 200.5,
+				distanceToTarget: -0.1,
+				warnings: []
+			})
+		);
+
+		const result = await setTargetPrice('AAPL', 200.5);
+
+		expect(fetch).toHaveBeenCalledWith('/api/target-prices/AAPL', {
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ targetPrice: 200.5 })
+		});
+		expect(result).toEqual({
+			symbol: 'AAPL',
+			targetPrice: 200.5,
+			distanceToTarget: -0.1,
+			warnings: []
+		});
+	});
+
+	it('URL-encodes a punctuated symbol', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, { symbol: 'HEXA-B.ST', targetPrice: 100, warnings: [] })
+		);
+
+		await setTargetPrice('HEXA-B.ST', 100);
+
+		expect(fetch).toHaveBeenCalledWith(
+			'/api/target-prices/HEXA-B.ST',
+			expect.objectContaining({ method: 'PUT' })
+		);
+	});
+
+	it('URL-encodes a symbol containing URL-significant characters', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, { symbol: 'A/B C', targetPrice: 100, warnings: [] })
+		);
+
+		await setTargetPrice('A/B C', 100);
+
+		expect(fetch).toHaveBeenCalledWith(
+			`/api/target-prices/${encodeURIComponent('A/B C')}`,
+			expect.objectContaining({ method: 'PUT' })
+		);
+	});
+
+	it('parses a response representing a successful save with an unavailable refreshed distance and a warning', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, {
+				symbol: 'AAPL',
+				targetPrice: 250,
+				warnings: [
+					{
+						code: 'MARKET_DATA_UNAVAILABLE',
+						message: 'Current market data is temporarily unavailable.'
+					}
+				]
+			})
+		);
+
+		const result = await setTargetPrice('AAPL', 250);
+
+		expect(result.distanceToTarget).toBeUndefined();
+		expect(result.warnings).toEqual([
+			{
+				code: 'MARKET_DATA_UNAVAILABLE',
+				message: 'Current market data is temporarily unavailable.'
+			}
+		]);
+	});
+
+	it('throws a WatchlistApiError with the stable code/message/status when the target price is invalid', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(400, {
+				error: { code: 'INVALID_TARGET_PRICE', message: 'The target price must be greater than 0.' }
+			})
+		);
+
+		await expect(setTargetPrice('AAPL', -10)).rejects.toMatchObject({
+			name: 'WatchlistApiError',
+			code: 'INVALID_TARGET_PRICE',
+			status: 400
 		});
 	});
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
 	WatchlistApiError,
+	type TargetPriceMutationResponse,
 	type WatchlistView,
 	type WatchlistsMetadataResponse
 } from './watchlistApi';
@@ -11,6 +12,7 @@ import {
 	deleteActiveWatchlistAndTransition,
 	loadInitialWatchlists,
 	removeStockFromActiveWatchlist,
+	setTargetPriceForActiveStock,
 	switchActiveWatchlist,
 	type WatchlistShellApi
 } from './watchlistShell';
@@ -39,6 +41,7 @@ function fakeApi(overrides?: Partial<WatchlistShellApi>): WatchlistShellApi {
 		deleteActiveWatchlist: vi.fn(),
 		addStock: vi.fn(),
 		removeStock: vi.fn(),
+		setTargetPrice: vi.fn(),
 		...overrides
 	};
 }
@@ -545,5 +548,125 @@ describe('removeStockFromActiveWatchlist', () => {
 		});
 
 		expect(onRemoveFailed).toHaveBeenCalledWith(error);
+	});
+});
+
+describe('setTargetPriceForActiveStock', () => {
+	function activeViewWithStocks(): WatchlistView {
+		return {
+			id: 'wl-1',
+			name: 'Main',
+			warnings: [],
+			stocks: [
+				{ symbol: 'AAPL', targetPrice: 180, distanceToTarget: 0.1, dividendYield: 0 },
+				{ symbol: 'SAP.DE', targetPrice: 150, distanceToTarget: -0.05, dividendYield: 0.03 }
+			]
+		};
+	}
+
+	function targetPriceHandlers() {
+		const calls: string[] = [];
+		return {
+			calls,
+			handlers: {
+				onSaving: () => calls.push('saving'),
+				onSaveFailed: () => calls.push('saveFailed'),
+				onSaved: () => calls.push('saved')
+			}
+		};
+	}
+
+	it('updates only the matching stock, leaving the other stock and order unchanged', async () => {
+		const response: TargetPriceMutationResponse = {
+			symbol: 'AAPL',
+			targetPrice: 200,
+			distanceToTarget: -0.1,
+			warnings: []
+		};
+		const api = fakeApi({ setTargetPrice: vi.fn().mockResolvedValue(response) });
+		const activeView = activeViewWithStocks();
+		const { calls, handlers } = targetPriceHandlers();
+		let updatedView: WatchlistView | undefined;
+
+		await setTargetPriceForActiveStock(api, activeView, 'AAPL', 200, {
+			...handlers,
+			onSaved: (view) => {
+				calls.push('saved');
+				updatedView = view;
+			}
+		});
+
+		expect(api.setTargetPrice).toHaveBeenCalledWith('AAPL', 200);
+		expect(calls).toEqual(['saving', 'saved']);
+		expect(updatedView?.stocks.map((stock) => stock.symbol)).toEqual(['AAPL', 'SAP.DE']);
+		expect(updatedView?.stocks[0]).toEqual({
+			symbol: 'AAPL',
+			targetPrice: 200,
+			distanceToTarget: -0.1,
+			dividendYield: 0
+		});
+		expect(updatedView?.stocks[1]).toEqual(activeView.stocks[1]);
+	});
+
+	it('does not issue a follow-up composed-Watchlist GET', async () => {
+		const response: TargetPriceMutationResponse = {
+			symbol: 'AAPL',
+			targetPrice: 200,
+			distanceToTarget: -0.1,
+			warnings: []
+		};
+		const api = fakeApi({ setTargetPrice: vi.fn().mockResolvedValue(response) });
+		const { handlers } = targetPriceHandlers();
+
+		await setTargetPriceForActiveStock(api, activeViewWithStocks(), 'AAPL', 200, handlers);
+
+		expect(api.loadWatchlist).not.toHaveBeenCalled();
+	});
+
+	it('leaves the previous active view untouched on save failure', async () => {
+		const error = new WatchlistApiError('INVALID_TARGET_PRICE', 'invalid', 400);
+		const api = fakeApi({ setTargetPrice: vi.fn().mockRejectedValue(error) });
+		const onSaveFailed = vi.fn();
+
+		await setTargetPriceForActiveStock(api, activeViewWithStocks(), 'AAPL', -10, {
+			onSaving: () => {},
+			onSaveFailed,
+			onSaved: () => {
+				throw new Error('should not be called');
+			}
+		});
+
+		expect(onSaveFailed).toHaveBeenCalledWith(error);
+	});
+
+	it('treats a successful save with a MARKET_DATA_UNAVAILABLE warning as success and surfaces the warning message', async () => {
+		const response: TargetPriceMutationResponse = {
+			symbol: 'AAPL',
+			targetPrice: 250,
+			warnings: [
+				{
+					code: 'MARKET_DATA_UNAVAILABLE',
+					message: 'Current market data is temporarily unavailable.'
+				}
+			]
+		};
+		const api = fakeApi({ setTargetPrice: vi.fn().mockResolvedValue(response) });
+		let updatedView: WatchlistView | undefined;
+		let warningMessage: string | undefined;
+
+		await setTargetPriceForActiveStock(api, activeViewWithStocks(), 'AAPL', 250, {
+			onSaving: () => {},
+			onSaveFailed: () => {
+				throw new Error('should not be called');
+			},
+			onSaved: (view, warning) => {
+				updatedView = view;
+				warningMessage = warning;
+			}
+		});
+
+		expect(updatedView?.stocks[0].targetPrice).toBe(250);
+		expect(updatedView?.stocks[0].distanceToTarget).toBeUndefined();
+		expect(warningMessage).toBe('Current market data is temporarily unavailable.');
 	});
 });

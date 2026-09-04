@@ -1,14 +1,18 @@
 <script lang="ts">
 	import type { WatchlistStock } from '$lib/client/watchlistApi';
 	import { formatNumber, formatPercentage, MISSING_VALUE_PLACEHOLDER } from '$lib/client/format';
+	import TargetPriceCell, {
+		type TargetPriceSaveResult
+	} from '$lib/components/TargetPriceCell.svelte';
 
 	interface Props {
 		stocks: WatchlistStock[];
 		busy?: boolean;
 		onRemove: (symbol: string) => void;
+		onSaveTargetPrice: (symbol: string, targetPrice: number) => Promise<TargetPriceSaveResult>;
 	}
 
-	let { stocks, busy = false, onRemove }: Props = $props();
+	let { stocks, busy = false, onRemove, onSaveTargetPrice }: Props = $props();
 </script>
 
 <div class="table-container">
@@ -35,7 +39,14 @@
 					<td class="numeric">{formatNumber(stock.price)}</td>
 					<td class="numeric">{formatPercentage(stock.dividendYield)}</td>
 					<td>{stock.currency ?? MISSING_VALUE_PLACEHOLDER}</td>
-					<td class="numeric">{formatNumber(stock.targetPrice)}</td>
+					<td class="numeric target-price-cell">
+						<TargetPriceCell
+							symbol={stock.symbol}
+							targetPrice={stock.targetPrice}
+							{busy}
+							onSave={onSaveTargetPrice}
+						/>
+					</td>
 					<td class="numeric">{formatPercentage(stock.distanceToTarget)}</td>
 					<td>
 						<button
@@ -77,6 +88,10 @@
 		white-space: normal;
 		min-width: 10rem;
 		max-width: 20rem;
+	}
+
+	td.target-price-cell {
+		white-space: normal;
 	}
 
 	thead th {

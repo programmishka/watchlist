@@ -6,6 +6,7 @@ import {
 	loadWatchlists,
 	removeStock,
 	selectActiveWatchlist,
+	setTargetPrice,
 	WatchlistApiError,
 	type WatchlistsMetadataResponse,
 	type WatchlistView
@@ -19,6 +20,7 @@ export interface WatchlistShellApi {
 	deleteActiveWatchlist: typeof deleteActiveWatchlist;
 	addStock: typeof addStock;
 	removeStock: typeof removeStock;
+	setTargetPrice: typeof setTargetPrice;
 }
 
 export const defaultWatchlistShellApi: WatchlistShellApi = {
@@ -28,7 +30,8 @@ export const defaultWatchlistShellApi: WatchlistShellApi = {
 	createWatchlist,
 	deleteActiveWatchlist,
 	addStock,
-	removeStock
+	removeStock,
+	setTargetPrice
 };
 
 function toWatchlistApiError(error: unknown): WatchlistApiError {
@@ -298,5 +301,49 @@ export async function removeStockFromActiveWatchlist(
 		handlers.onRemoved(view);
 	} catch (error) {
 		handlers.onRemoveFailed(toWatchlistApiError(error));
+	}
+}
+
+export interface SetTargetPriceHandlers {
+	onSaving: () => void;
+	onSaved: (view: WatchlistView, marketDataWarningMessage?: string) => void;
+	onSaveFailed: (error: WatchlistApiError) => void;
+}
+
+/**
+ * Implements TASK-021 §16-32: persists a Target Price for one symbol and
+ * merges only that symbol's server-confirmed `targetPrice`/`distanceToTarget`
+ * into the given active Watchlist view, preserving every other stock, field,
+ * and the existing stock order. No follow-up composed-Watchlist GET is
+ * issued. A successful save whose market-data refresh failed (TASK-013 §19)
+ * is still reported through `onSaved`, with the warning message surfaced
+ * separately rather than treated as a failure.
+ */
+export async function setTargetPriceForActiveStock(
+	api: WatchlistShellApi,
+	activeView: WatchlistView,
+	symbol: string,
+	targetPrice: number,
+	handlers: SetTargetPriceHandlers
+): Promise<void> {
+	handlers.onSaving();
+
+	try {
+		const response = await api.setTargetPrice(symbol, targetPrice);
+		const stocks = activeView.stocks.map((stock) =>
+			stock.symbol === response.symbol
+				? {
+						...stock,
+						targetPrice: response.targetPrice,
+						distanceToTarget: response.distanceToTarget
+					}
+				: stock
+		);
+		const marketDataWarning = response.warnings.find(
+			(warning) => warning.code === 'MARKET_DATA_UNAVAILABLE'
+		);
+		handlers.onSaved({ ...activeView, stocks }, marketDataWarning?.message);
+	} catch (error) {
+		handlers.onSaveFailed(toWatchlistApiError(error));
 	}
 }

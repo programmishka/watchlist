@@ -15,8 +15,10 @@
 		deleteActiveWatchlistAndTransition,
 		loadInitialWatchlists,
 		removeStockFromActiveWatchlist,
+		setTargetPriceForActiveStock,
 		switchActiveWatchlist
 	} from '$lib/client/watchlistShell';
+	import type { TargetPriceSaveResult } from '$lib/components/TargetPriceCell.svelte';
 
 	type MetadataStatus = 'loading' | 'loaded' | 'error';
 	type ActiveViewStatus = 'idle' | 'loading' | 'loaded' | 'error';
@@ -43,13 +45,16 @@
 	let stockMutationBusy = $state(false);
 	let stockMutationError = $state<WatchlistApiError | undefined>(undefined);
 
+	let targetPriceMutationBusy = $state(false);
+
 	// Any in-flight mutation or content load blocks other management actions
 	// so responses can't resolve out of order and clobber a newer selection.
 	let managementBusy = $derived(
 		activeViewStatus === 'loading' ||
 			createStatus === 'creating' ||
 			deleteStatus === 'deleting' ||
-			stockMutationBusy
+			stockMutationBusy ||
+			targetPriceMutationBusy
 	);
 	let createDisabled = $derived(newWatchlistName.trim().length === 0 || managementBusy);
 	let addStockDisabled = $derived(newStockSymbol.trim().length === 0 || managementBusy);
@@ -247,6 +252,33 @@
 			}
 		});
 	}
+
+	function handleSaveTargetPrice(
+		symbol: string,
+		targetPrice: number
+	): Promise<TargetPriceSaveResult> {
+		const view = activeView;
+		if (!view) {
+			return Promise.resolve({ ok: false, message: 'No active watchlist is loaded.' });
+		}
+
+		return new Promise((resolve) => {
+			setTargetPriceForActiveStock(defaultWatchlistShellApi, view, symbol, targetPrice, {
+				onSaving: () => {
+					targetPriceMutationBusy = true;
+				},
+				onSaved: (updatedView, marketDataWarningMessage) => {
+					activeView = updatedView;
+					targetPriceMutationBusy = false;
+					resolve({ ok: true, warningMessage: marketDataWarningMessage });
+				},
+				onSaveFailed: (error) => {
+					targetPriceMutationBusy = false;
+					resolve({ ok: false, message: error.message });
+				}
+			});
+		});
+	}
 </script>
 
 <div class="page">
@@ -367,6 +399,7 @@
 							stocks={activeView.stocks}
 							busy={managementBusy}
 							onRemove={handleRemoveStock}
+							onSaveTargetPrice={handleSaveTargetPrice}
 						/>
 					{/if}
 				{/if}

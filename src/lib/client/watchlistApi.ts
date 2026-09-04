@@ -19,7 +19,12 @@ export interface WatchlistStock {
 	price?: number;
 	currency?: string;
 	targetPrice?: number;
-	distanceToTarget: number;
+	/**
+	 * Undefined represents a genuinely unavailable refreshed distance (e.g. a
+	 * Target Price save whose market-data refresh failed, TASK-021 §28), and
+	 * must be displayed distinctly from a real numeric `0`.
+	 */
+	distanceToTarget?: number;
 	dividendYield: number;
 	marketCapBillionsUsd?: number;
 }
@@ -28,6 +33,14 @@ export interface WatchlistView {
 	id: string;
 	name: string;
 	stocks: WatchlistStock[];
+	warnings: WatchlistWarning[];
+}
+
+/** Response shape of `PUT /api/target-prices/{symbol}` (TASK-013), reused as-is by TASK-021. */
+export interface TargetPriceMutationResponse {
+	symbol: string;
+	targetPrice: number;
+	distanceToTarget?: number;
 	warnings: WatchlistWarning[];
 }
 
@@ -111,5 +124,19 @@ export function removeStock(watchlistId: string, symbol: string): Promise<Watchl
 	return requestJson<WatchlistView>(
 		`/api/watchlists/${encodeURIComponent(watchlistId)}/stocks/${encodeURIComponent(symbol)}`,
 		{ method: 'DELETE' }
+	);
+}
+
+export function setTargetPrice(
+	symbol: string,
+	targetPrice: number
+): Promise<TargetPriceMutationResponse> {
+	return requestJson<TargetPriceMutationResponse>(
+		`/api/target-prices/${encodeURIComponent(symbol)}`,
+		{
+			method: 'PUT',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ targetPrice })
+		}
 	);
 }
