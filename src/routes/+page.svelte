@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import WatchlistTabs from '$lib/components/WatchlistTabs.svelte';
+	import WatchlistTable from '$lib/components/WatchlistTable.svelte';
 	import type {
 		WatchlistApiError,
 		WatchlistMetadata,
@@ -135,7 +136,7 @@
 					<p class="status">This watchlist is empty.</p>
 				{:else}
 					<h2>{activeView.name}</h2>
-					<p>{activeView.stocks.length} stocks</p>
+					<WatchlistTable stocks={activeView.stocks} />
 				{/if}
 			{/if}
 		</div>

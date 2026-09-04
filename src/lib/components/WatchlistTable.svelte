@@ -1,0 +1,80 @@
+<script lang="ts">
+	import type { WatchlistStock } from '$lib/client/watchlistApi';
+	import { formatNumber, formatPercentage, MISSING_VALUE_PLACEHOLDER } from '$lib/client/format';
+
+	interface Props {
+		stocks: WatchlistStock[];
+	}
+
+	let { stocks }: Props = $props();
+</script>
+
+<div class="table-container">
+	<table>
+		<thead>
+			<tr>
+				<th scope="col">Symbol</th>
+				<th scope="col">Name</th>
+				<th scope="col" class="numeric">Cap (USD)</th>
+				<th scope="col" class="numeric">Price</th>
+				<th scope="col" class="numeric">Div</th>
+				<th scope="col">Currency</th>
+				<th scope="col" class="numeric">Target Price</th>
+				<th scope="col" class="numeric">Distance to Target</th>
+			</tr>
+		</thead>
+		<tbody>
+			{#each stocks as stock (stock.symbol)}
+				<tr>
+					<td>{stock.symbol}</td>
+					<td class="name">{stock.name ?? MISSING_VALUE_PLACEHOLDER}</td>
+					<td class="numeric">{formatNumber(stock.marketCapBillionsUsd)}</td>
+					<td class="numeric">{formatNumber(stock.price)}</td>
+					<td class="numeric">{formatPercentage(stock.dividendYield)}</td>
+					<td>{stock.currency ?? MISSING_VALUE_PLACEHOLDER}</td>
+					<td class="numeric">{formatNumber(stock.targetPrice)}</td>
+					<td class="numeric">{formatPercentage(stock.distanceToTarget)}</td>
+				</tr>
+			{/each}
+		</tbody>
+	</table>
+</div>
+
+<style>
+	.table-container {
+		overflow-x: auto;
+	}
+
+	table {
+		width: 100%;
+		min-width: 720px;
+		border-collapse: collapse;
+	}
+
+	th,
+	td {
+		padding: 0.5rem 0.75rem;
+		text-align: left;
+		white-space: nowrap;
+	}
+
+	td.name {
+		white-space: normal;
+		min-width: 10rem;
+		max-width: 20rem;
+	}
+
+	thead th {
+		border-bottom: 2px solid #d0d0d0;
+		font-weight: 600;
+	}
+
+	tbody tr {
+		border-bottom: 1px solid #eee;
+	}
+
+	.numeric {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+</style>
