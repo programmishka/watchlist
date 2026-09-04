@@ -6,6 +6,8 @@ import {
 } from './watchlistApi';
 import {
 	chooseInitialActiveWatchlistId,
+	createWatchlistAndActivate,
+	deleteActiveWatchlistAndTransition,
 	loadInitialWatchlists,
 	switchActiveWatchlist,
 	type WatchlistShellApi
@@ -31,6 +33,8 @@ function fakeApi(overrides?: Partial<WatchlistShellApi>): WatchlistShellApi {
 		loadWatchlists: vi.fn(),
 		selectActiveWatchlist: vi.fn(),
 		loadWatchlist: vi.fn(),
+		createWatchlist: vi.fn(),
+		deleteActiveWatchlist: vi.fn(),
 		...overrides
 	};
 }
@@ -228,6 +232,194 @@ describe('switchActiveWatchlist', () => {
 		});
 
 		expect(onSelected).toHaveBeenCalled();
+		expect(onActiveWatchlistError).toHaveBeenCalledWith(error);
+	});
+});
+
+describe('createWatchlistAndActivate', () => {
+	function createHandlers() {
+		const calls: string[] = [];
+		return {
+			calls,
+			handlers: {
+				onCreating: () => calls.push('creating'),
+				onCreateFailed: () => calls.push('createFailed'),
+				onCreated: () => calls.push('created'),
+				onActiveWatchlistLoading: () => calls.push('activeLoading'),
+				onActiveWatchlistLoaded: () => calls.push('activeLoaded'),
+				onActiveWatchlistError: () => calls.push('activeError')
+			}
+		};
+	}
+
+	it('does not call the API for an empty or whitespace-only name', async () => {
+		const api = fakeApi();
+		const { calls, handlers } = createHandlers();
+
+		await createWatchlistAndActivate(api, '   ', handlers);
+
+		expect(api.createWatchlist).not.toHaveBeenCalled();
+		expect(calls).toEqual([]);
+	});
+
+	it('sends the trimmed name, then loads the server-selected active watchlist', async () => {
+		const response = metadata({
+			activeWatchlistId: 'wl-3',
+			watchlists: [
+				{ id: 'wl-1', name: 'Main' },
+				{ id: 'wl-2', name: 'Dividend' },
+				{ id: 'wl-3', name: 'Tech' }
+			]
+		});
+		const api = fakeApi({
+			createWatchlist: vi.fn().mockResolvedValue(response),
+			loadWatchlist: vi.fn().mockResolvedValue(view('wl-3'))
+		});
+		const { calls, handlers } = createHandlers();
+
+		await createWatchlistAndActivate(api, '  Tech  ', handlers);
+
+		expect(api.createWatchlist).toHaveBeenCalledWith('Tech');
+		expect(api.loadWatchlist).toHaveBeenCalledWith('wl-3');
+		expect(calls).toEqual(['creating', 'created', 'activeLoading', 'activeLoaded']);
+	});
+
+	it('reports a create failure without loading a watchlist', async () => {
+		const error = new WatchlistApiError('INVALID_WATCHLIST_NAME', 'bad name', 400);
+		const api = fakeApi({ createWatchlist: vi.fn().mockRejectedValue(error) });
+		const onCreateFailed = vi.fn();
+
+		await createWatchlistAndActivate(api, 'Tech', {
+			onCreating: () => {},
+			onCreateFailed,
+			onCreated: () => {},
+			onActiveWatchlistLoading: () => {},
+			onActiveWatchlistLoaded: () => {},
+			onActiveWatchlistError: () => {}
+		});
+
+		expect(onCreateFailed).toHaveBeenCalledWith(error);
+		expect(api.loadWatchlist).not.toHaveBeenCalled();
+	});
+
+	it('keeps the newly active watchlist and reports a load error when the GET fails after a successful create', async () => {
+		const error = new WatchlistApiError('INTERNAL_ERROR', 'boom', 500);
+		const response = metadata({
+			activeWatchlistId: 'wl-3',
+			watchlists: [
+				{ id: 'wl-1', name: 'Main' },
+				{ id: 'wl-3', name: 'Tech' }
+			]
+		});
+		const api = fakeApi({
+			createWatchlist: vi.fn().mockResolvedValue(response),
+			loadWatchlist: vi.fn().mockRejectedValue(error)
+		});
+		const onCreated = vi.fn();
+		const onActiveWatchlistError = vi.fn();
+
+		await createWatchlistAndActivate(api, 'Tech', {
+			onCreating: () => {},
+			onCreateFailed: () => {},
+			onCreated,
+			onActiveWatchlistLoading: () => {},
+			onActiveWatchlistLoaded: () => {},
+			onActiveWatchlistError
+		});
+
+		expect(onCreated).toHaveBeenCalledWith(response, 'wl-3');
+		expect(onActiveWatchlistError).toHaveBeenCalledWith(error);
+	});
+});
+
+describe('deleteActiveWatchlistAndTransition', () => {
+	function deleteHandlers() {
+		const calls: string[] = [];
+		return {
+			calls,
+			handlers: {
+				onDeleting: () => calls.push('deleting'),
+				onDeleteFailed: () => calls.push('deleteFailed'),
+				onDeleted: () => calls.push('deleted'),
+				onNoWatchlistsRemaining: () => calls.push('noneRemaining'),
+				onActiveWatchlistLoading: () => calls.push('activeLoading'),
+				onActiveWatchlistLoaded: () => calls.push('activeLoaded'),
+				onActiveWatchlistError: () => calls.push('activeError')
+			}
+		};
+	}
+
+	it('loads the server-selected replacement watchlist after a successful deletion', async () => {
+		const response = metadata({
+			activeWatchlistId: 'wl-1',
+			watchlists: [{ id: 'wl-1', name: 'Main' }]
+		});
+		const api = fakeApi({
+			deleteActiveWatchlist: vi.fn().mockResolvedValue(response),
+			loadWatchlist: vi.fn().mockResolvedValue(view('wl-1'))
+		});
+		const { calls, handlers } = deleteHandlers();
+
+		await deleteActiveWatchlistAndTransition(api, handlers);
+
+		expect(api.loadWatchlist).toHaveBeenCalledWith('wl-1');
+		expect(calls).toEqual(['deleting', 'deleted', 'activeLoading', 'activeLoaded']);
+	});
+
+	it('stops without issuing a composed-watchlist GET when the final watchlist is deleted', async () => {
+		const response = metadata({ activeWatchlistId: undefined, watchlists: [] });
+		const api = fakeApi({ deleteActiveWatchlist: vi.fn().mockResolvedValue(response) });
+		const { calls, handlers } = deleteHandlers();
+
+		await deleteActiveWatchlistAndTransition(api, handlers);
+
+		expect(api.loadWatchlist).not.toHaveBeenCalled();
+		expect(calls).toEqual(['deleting', 'deleted', 'noneRemaining']);
+	});
+
+	it('reports a delete failure without changing metadata or issuing a GET', async () => {
+		const error = new WatchlistApiError('INTERNAL_ERROR', 'boom', 500);
+		const api = fakeApi({ deleteActiveWatchlist: vi.fn().mockRejectedValue(error) });
+		const onDeleteFailed = vi.fn();
+
+		await deleteActiveWatchlistAndTransition(api, {
+			onDeleting: () => {},
+			onDeleteFailed,
+			onDeleted: () => {},
+			onNoWatchlistsRemaining: () => {},
+			onActiveWatchlistLoading: () => {},
+			onActiveWatchlistLoaded: () => {},
+			onActiveWatchlistError: () => {}
+		});
+
+		expect(onDeleteFailed).toHaveBeenCalledWith(error);
+		expect(api.loadWatchlist).not.toHaveBeenCalled();
+	});
+
+	it('keeps the replacement watchlist active and reports a load error when the GET fails after a successful delete', async () => {
+		const error = new WatchlistApiError('INTERNAL_ERROR', 'boom', 500);
+		const response = metadata({
+			activeWatchlistId: 'wl-1',
+			watchlists: [{ id: 'wl-1', name: 'Main' }]
+		});
+		const api = fakeApi({
+			deleteActiveWatchlist: vi.fn().mockResolvedValue(response),
+			loadWatchlist: vi.fn().mockRejectedValue(error)
+		});
+		const onDeleted = vi.fn();
+		const onActiveWatchlistError = vi.fn();
+
+		await deleteActiveWatchlistAndTransition(api, {
+			onDeleting: () => {},
+			onDeleteFailed: () => {},
+			onDeleted,
+			onNoWatchlistsRemaining: () => {},
+			onActiveWatchlistLoading: () => {},
+			onActiveWatchlistLoaded: () => {},
+			onActiveWatchlistError
+		});
+
+		expect(onDeleted).toHaveBeenCalledWith(response);
 		expect(onActiveWatchlistError).toHaveBeenCalledWith(error);
 	});
 });

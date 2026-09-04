@@ -1,4 +1,6 @@
 import {
+	createWatchlist,
+	deleteActiveWatchlist,
 	loadWatchlist,
 	loadWatchlists,
 	selectActiveWatchlist,
@@ -11,12 +13,16 @@ export interface WatchlistShellApi {
 	loadWatchlists: typeof loadWatchlists;
 	selectActiveWatchlist: typeof selectActiveWatchlist;
 	loadWatchlist: typeof loadWatchlist;
+	createWatchlist: typeof createWatchlist;
+	deleteActiveWatchlist: typeof deleteActiveWatchlist;
 }
 
 export const defaultWatchlistShellApi: WatchlistShellApi = {
 	loadWatchlists,
 	selectActiveWatchlist,
-	loadWatchlist
+	loadWatchlist,
+	createWatchlist,
+	deleteActiveWatchlist
 };
 
 function toWatchlistApiError(error: unknown): WatchlistApiError {
@@ -119,6 +125,108 @@ export async function switchActiveWatchlist(
 
 	try {
 		const view = await api.loadWatchlist(watchlistId);
+		handlers.onActiveWatchlistLoaded(view);
+	} catch (error) {
+		handlers.onActiveWatchlistError(toWatchlistApiError(error));
+	}
+}
+
+export interface CreateWatchlistHandlers {
+	onCreating: () => void;
+	onCreateFailed: (error: WatchlistApiError) => void;
+	onCreated: (response: WatchlistsMetadataResponse, activeWatchlistId?: string) => void;
+	onActiveWatchlistLoading: () => void;
+	onActiveWatchlistLoaded: (view: WatchlistView) => void;
+	onActiveWatchlistError: (error: WatchlistApiError) => void;
+}
+
+/**
+ * Implements TASK-019 §2-4/§15: sends the trimmed name, treats the response
+ * as the sole source of truth for which Watchlist became active (never
+ * inventing the active id itself), then loads that composed Watchlist. A
+ * blank/whitespace-only name is refused before any request is sent.
+ */
+export async function createWatchlistAndActivate(
+	api: WatchlistShellApi,
+	name: string,
+	handlers: CreateWatchlistHandlers
+): Promise<void> {
+	const trimmedName = name.trim();
+	if (!trimmedName) {
+		return;
+	}
+
+	handlers.onCreating();
+
+	let response: WatchlistsMetadataResponse;
+	try {
+		response = await api.createWatchlist(trimmedName);
+	} catch (error) {
+		handlers.onCreateFailed(toWatchlistApiError(error));
+		return;
+	}
+
+	const activeWatchlistId = response.activeWatchlistId;
+	handlers.onCreated(response, activeWatchlistId);
+
+	if (!activeWatchlistId) {
+		return;
+	}
+
+	handlers.onActiveWatchlistLoading();
+	try {
+		const view = await api.loadWatchlist(activeWatchlistId);
+		handlers.onActiveWatchlistLoaded(view);
+	} catch (error) {
+		handlers.onActiveWatchlistError(toWatchlistApiError(error));
+	}
+}
+
+export interface DeleteActiveWatchlistHandlers {
+	onDeleting: () => void;
+	onDeleteFailed: (error: WatchlistApiError) => void;
+	onDeleted: (response: WatchlistsMetadataResponse) => void;
+	onNoWatchlistsRemaining: () => void;
+	onActiveWatchlistLoading: () => void;
+	onActiveWatchlistLoaded: (view: WatchlistView) => void;
+	onActiveWatchlistError: (error: WatchlistApiError) => void;
+}
+
+/**
+ * Implements TASK-019 §22-28: deletes the server-side active Watchlist and
+ * follows the returned metadata rather than reproducing the backend's
+ * replacement-selection rule. When no Watchlist remains, it stops without
+ * issuing a composed-Watchlist GET.
+ */
+export async function deleteActiveWatchlistAndTransition(
+	api: WatchlistShellApi,
+	handlers: DeleteActiveWatchlistHandlers
+): Promise<void> {
+	handlers.onDeleting();
+
+	let response: WatchlistsMetadataResponse;
+	try {
+		response = await api.deleteActiveWatchlist();
+	} catch (error) {
+		handlers.onDeleteFailed(toWatchlistApiError(error));
+		return;
+	}
+
+	handlers.onDeleted(response);
+
+	if (response.watchlists.length === 0) {
+		handlers.onNoWatchlistsRemaining();
+		return;
+	}
+
+	const activeWatchlistId = response.activeWatchlistId;
+	if (!activeWatchlistId) {
+		return;
+	}
+
+	handlers.onActiveWatchlistLoading();
+	try {
+		const view = await api.loadWatchlist(activeWatchlistId);
 		handlers.onActiveWatchlistLoaded(view);
 	} catch (error) {
 		handlers.onActiveWatchlistError(toWatchlistApiError(error));

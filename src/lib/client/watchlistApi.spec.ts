@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+	createWatchlist,
+	deleteActiveWatchlist,
 	loadWatchlist,
 	loadWatchlists,
 	selectActiveWatchlist,
@@ -117,5 +119,65 @@ describe('loadWatchlist', () => {
 		vi.mocked(fetch).mockRejectedValue(new TypeError('network down'));
 
 		await expect(loadWatchlist('wl-1')).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+	});
+});
+
+describe('createWatchlist', () => {
+	it('issues a POST to /api/watchlists with the given name', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, {
+				activeWatchlistId: 'wl-3',
+				watchlists: [
+					{ id: 'wl-1', name: 'Main' },
+					{ id: 'wl-3', name: 'Tech' }
+				]
+			})
+		);
+
+		const result = await createWatchlist('Tech');
+
+		expect(fetch).toHaveBeenCalledWith('/api/watchlists', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ name: 'Tech' })
+		});
+		expect(result.activeWatchlistId).toBe('wl-3');
+	});
+
+	it('throws a WatchlistApiError with the stable code/message/status on failure', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(400, {
+				error: { code: 'INVALID_WATCHLIST_NAME', message: 'A watchlist name is required.' }
+			})
+		);
+
+		await expect(createWatchlist('')).rejects.toMatchObject({
+			name: 'WatchlistApiError',
+			code: 'INVALID_WATCHLIST_NAME',
+			status: 400
+		});
+	});
+});
+
+describe('deleteActiveWatchlist', () => {
+	it('issues a DELETE to /api/watchlists/active with no body', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, { activeWatchlistId: 'wl-1', watchlists: [{ id: 'wl-1', name: 'Main' }] })
+		);
+
+		const result = await deleteActiveWatchlist();
+
+		expect(fetch).toHaveBeenCalledWith('/api/watchlists/active', { method: 'DELETE' });
+		expect(result.watchlists).toEqual([{ id: 'wl-1', name: 'Main' }]);
+	});
+
+	it('throws a WatchlistApiError when there is no active watchlist to delete', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(409, {
+				error: { code: 'NO_ACTIVE_WATCHLIST', message: 'There is no active watchlist.' }
+			})
+		);
+
+		await expect(deleteActiveWatchlist()).rejects.toBeInstanceOf(WatchlistApiError);
 	});
 });

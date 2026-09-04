@@ -84,3 +84,17 @@ export function selectActiveWatchlist(watchlistId: string): Promise<WatchlistsMe
 export function loadWatchlist(watchlistId: string): Promise<WatchlistView> {
 	return requestJson<WatchlistView>(`/api/watchlists/${encodeURIComponent(watchlistId)}`);
 }
+
+export function createWatchlist(name: string): Promise<WatchlistsMetadataResponse> {
+	return requestJson<WatchlistsMetadataResponse>('/api/watchlists', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ name })
+	});
+}
+
+export function deleteActiveWatchlist(): Promise<WatchlistsMetadataResponse> {
+	return requestJson<WatchlistsMetadataResponse>('/api/watchlists/active', {
+		method: 'DELETE'
+	});
+}

@@ -88,3 +88,40 @@ export async function mockSelectActiveWatchlist(
 	});
 	return { calls };
 }
+
+/** Mocks `POST /api/watchlists` and records every requested `name`. */
+export async function mockCreateWatchlist(
+	page: Page,
+	handler: (name: string) => WatchlistsMetadataResponse | JsonResponse
+): Promise<RouteCallRecorder> {
+	const calls: string[] = [];
+	await page.route('**/api/watchlists', async (route) => {
+		if (route.request().method() !== 'POST') {
+			await route.fallback();
+			return;
+		}
+		const { name } = route.request().postDataJSON() as { name: string };
+		calls.push(name);
+		const { status, body } = toJsonResponse(handler(name), 200);
+		await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+	});
+	return { calls };
+}
+
+/** Mocks `DELETE /api/watchlists/active` and records how many times it was requested. */
+export async function mockDeleteActiveWatchlist(
+	page: Page,
+	response: WatchlistsMetadataResponse | JsonResponse
+): Promise<RouteCallRecorder> {
+	const calls: string[] = [];
+	await page.route('**/api/watchlists/active', async (route) => {
+		if (route.request().method() !== 'DELETE') {
+			await route.fallback();
+			return;
+		}
+		calls.push('DELETE');
+		const { status, body } = toJsonResponse(response, 200);
+		await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+	});
+	return { calls };
+}

@@ -1241,6 +1241,18 @@ Tab controls are disabled while a Watchlist load (initial or tab-switch) is in f
 
 Tab overflow on narrow viewports is handled with simple horizontal scrolling on the tab strip rather than a dropdown or other overflow menu. No general-purpose CSS framework or component library was introduced; layout uses native Flexbox and a responsive content-width container.
 
+### 26.2 Watchlist Management UI (TASK-019)
+
+Creating and deleting Watchlists reuses the shell established in §26.1 rather than introducing a separate state-management layer. `src/lib/client/watchlistApi.ts` gains `createWatchlist(name)` (`POST /api/watchlists`) and `deleteActiveWatchlist()` (`DELETE /api/watchlists/active`); `src/lib/client/watchlistShell.ts` gains `createWatchlistAndActivate` and `deleteActiveWatchlistAndTransition`, following the same pattern as `switchActiveWatchlist`.
+
+Both mutations treat the server response as the sole source of truth: the client never invents which Watchlist becomes active after creation, nor which Watchlist replaces the deleted one — it simply follows the returned `activeWatchlistId` and loads that composed Watchlist. No client-side replacement-selection algorithm exists. Deleting the last Watchlist (`watchlists = []`) stops after updating metadata and does not issue a composed-Watchlist `GET`.
+
+`createWatchlistAndActivate` refuses an empty/whitespace-only name before calling the API, so the client never sends an obviously meaningless create request; the backend remains authoritative for all other name validation, including allowing duplicate names (tabs stay keyed by `id`, per §26.1).
+
+Watchlist deletion requires confirmation. The UI uses a native `window.confirm()` dialog naming the active Watchlist rather than a custom modal/dialog library, per the project's preference for the smallest workable accessible implementation (§14.3). Cancelling sends no request and leaves existing state untouched.
+
+A single derived "management busy" flag in `+page.svelte` — true while the active Watchlist content is loading, or a create/delete mutation is in flight — disables the create input/button, the delete button, and the tab strip together. This reuses the existing tab-disabling mechanism from §26.1 rather than introducing a generic request queue or separate concurrency-control abstraction.
+
 ---
 
 ## 27. Testing Strategy
