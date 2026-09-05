@@ -43,19 +43,26 @@ usable locally without any Cloudflare account.
 Required production configuration:
 
 ```text
-ACCESS_TEAM_DOMAIN   e.g. https://<team-name>.cloudflareaccess.com   (Cloudflare dashboard)
-ACCESS_AUD           this Worker's Access Application Audience (AUD) tag (Cloudflare dashboard)
+ACCESS_TEAM_DOMAIN   full URL: https://<team-name>.cloudflareaccess.com   (Worker Secret)
+ACCESS_AUD           this Worker's Access Application Audience (AUD) tag  (Worker Secret)
 WATCHLIST_KV         the production KV namespace binding (wrangler.jsonc)
 ```
 
-`ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are managed only as runtime
-variables in the Cloudflare Worker dashboard (Settings → Runtime variables
-and secrets), not in `wrangler.jsonc` — real Access values must never be
-committed to the repository. `wrangler.jsonc` sets `keep_vars: true` so
-`wrangler deploy` preserves those dashboard-managed variables instead of
-clearing them. `wrangler types` cannot discover dashboard-only variables, so
-they are not part of the generated `Env`; the application composes them in
-through a small, narrow type instead (see `ARCHITECTURE.md`).
+`ACCESS_TEAM_DOMAIN` must include the `https://` scheme — the current
+authentication implementation requires the full URL, not just the team name.
+`ACCESS_AUD` is the Access **Application Audience (AUD) tag** for the Access
+application protecting this Worker — it is not a policy ID, account ID, or
+application display name.
+
+`ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are configured only as Cloudflare
+Worker **Secrets** (Settings → Runtime variables and secrets → Type:
+Secret), not in `wrangler.jsonc` — real Access values must never be
+committed to the repository. Using Secrets (rather than ordinary Text
+variables) avoids Wrangler remote-variable override conflicts on deploy;
+these two values are configuration, not high-value credentials.
+`wrangler.jsonc` declares `secrets: { required: ["ACCESS_TEAM_DOMAIN",
+"ACCESS_AUD"] }` (names only, never values), which lets `wrangler types`
+generate them as part of the standard `Env`.
 
 Missing `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` values make production
 authentication fail closed (every request is treated as unauthenticated)
@@ -158,16 +165,17 @@ Production deployment targets Cloudflare Workers. See `ARCHITECTURE.md` for arch
 Before deploying, manually confirm the real Cloudflare Access values are set
 in the Cloudflare Worker dashboard (Settings → Runtime variables and
 secrets — from the Access application already created for this Worker in
-the Cloudflare Zero Trust dashboard):
+the Cloudflare Zero Trust dashboard), each with **Type: Secret**:
 
 ```text
 ACCESS_TEAM_DOMAIN
 ACCESS_AUD
 ```
 
-These are never set in `wrangler.jsonc` and are preserved across deploys by
-`keep_vars: true`. This project does not automate Cloudflare account
-configuration or deployment.
+These are never set in `wrangler.jsonc`. Ordinary `wrangler deploy` does not
+delete or prompt to delete Secrets (unlike ordinary `vars`), so no
+`keep_vars`/`--keep-vars` configuration is needed to preserve them. This
+project does not automate Cloudflare account configuration or deployment.
 
 Deploy with:
 
@@ -189,3 +197,14 @@ After deploying with the real values configured:
 3. Enter the PIN and confirm the Watchlist UI loads (not "Authentication is required.").
 4. Create or load a Watchlist and confirm it persists — this exercises `user:<verified-sub>:watchlists` in production `WATCHLIST_KV`, keyed by the JWT's verified `sub`, never by email.
 5. Attempt the same flow with a non-allowlisted email and confirm Cloudflare Access itself blocks the login before the application is reached.
+
+**Verified (TASK-028):** Steps 1–3 have been manually confirmed in
+production with an allowlisted email — the One-Time PIN was delivered,
+accepted, and the Watchlist application loaded successfully (no actual
+email address recorded here). Step 5 has also been manually confirmed with
+a non-allowlisted email: Cloudflare Access shows the PIN-entry step but
+does not deliver a PIN, so the application remains unreachable. This is
+expected Cloudflare Access behavior (it avoids leaking allowlist
+membership) and does not need to be reproduced inside the application. The
+negative-allowlist check does not need to be repeated unless the Access
+policy changes.

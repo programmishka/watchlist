@@ -11,12 +11,14 @@ import type { AuthenticationContext, AuthenticationResult } from './Authenticati
 const ACCESS_JWT_HEADER = 'Cf-Access-Jwt-Assertion';
 
 /**
- * `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` are configured only as Cloudflare
- * dashboard runtime variables, so `wrangler types` cannot discover them and
- * they never appear in the generated `Env` (TASK-027). This narrow,
- * application-owned type lets the production authentication factory depend
- * only on the two values it actually needs, independent of `Env`'s other
- * (generated) bindings such as `WATCHLIST_KV`/`ASSETS`.
+ * `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` are declared as required Secrets in
+ * `wrangler.jsonc` (TASK-028) and so are also present on the generated
+ * `Env`. This narrow, application-owned type is kept anyway so the
+ * production authentication factory depends only on the two values it
+ * actually needs, independent of `Env`'s other (generated) bindings such as
+ * `WATCHLIST_KV`/`ASSETS`. Fields stay optional: generated types describing
+ * a Secret as a required `string` do not prove it is actually configured in
+ * a given deployment, so runtime presence is still validated below.
  */
 export interface AccessEnvironment {
 	ACCESS_TEAM_DOMAIN?: string;

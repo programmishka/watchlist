@@ -16,5 +16,7 @@
 			"id": "1be7f0e039e24a128957a523981f3381"
 		}
 	],
-	"keep_vars": true
+	"secrets": {
+		"required": ["ACCESS_TEAM_DOMAIN", "ACCESS_AUD"]
+	}
 }

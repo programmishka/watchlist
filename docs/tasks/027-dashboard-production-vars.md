@@ -4,6 +4,14 @@
 
 Done
 
+> **Superseded in part by TASK-028.** Production `ACCESS_TEAM_DOMAIN`/
+> `ACCESS_AUD` values were subsequently changed from dashboard Text
+> variables to Worker Secrets in TASK-028 to avoid Wrangler remote-variable
+> override conflicts. `keep_vars: true` and the `Env & AccessEnvironment`
+> composition described below were the correct solution for the
+> dashboard-Text-variable model in place at the time; see TASK-028 for the
+> final Secret-based configuration.
+
 ## Goal
 
 Finalize the Cloudflare production configuration introduced by TASK-026 so that:
