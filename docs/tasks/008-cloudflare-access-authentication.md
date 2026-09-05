@@ -4,6 +4,13 @@
 
 Done
 
+> **Superseded in part by TASK-026.** Production `ctx.access` identity
+> mechanism superseded by TASK-026 because Cloudflare's Static Assets router
+> does not pass `ctx.access` to the user Worker. TASK-008's other principles
+> (Cloudflare Access as the authentication provider, no passwords, server-derived
+> identity, no client-provided user IDs, fail-closed authentication, user-scoped
+> persistence) remain authoritative. See `ARCHITECTURE.md` §8.2.
+
 ## Goal
 
 Implement the server-side authentication-context boundary using Cloudflare Workers' native Cloudflare Access integration.

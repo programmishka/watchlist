@@ -19,7 +19,8 @@
 		"test": "npm run test:unit -- --run",
 		"test:e2e": "playwright test",
 		"test:e2e:ui": "playwright test --ui",
-		"gen": "wrangler types"
+		"gen": "wrangler types",
+		"deploy": "npm run build && wrangler deploy"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -43,6 +44,7 @@
 		"wrangler": "^4.97.0"
 	},
 	"dependencies": {
+		"jose": "^6.2.12",
 		"yahoo-finance2": "^4.0.2"
 	}
 }

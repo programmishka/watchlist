@@ -256,9 +256,13 @@ The application MUST NOT:
 
 The authenticated Cloudflare Access identity is the source of the application user identity.
 
-The application derives the authenticated user identity from the Cloudflare Workers Access context (ctx.access). The stable Access user identifier returned by the authenticated identity is used as the application user ID. Application code does not parse or validate Access JWTs itself.
+**Production (TASK-026, superseding TASK-008's `ctx.access` mechanism):** This Worker deploys with Static Assets (`assets.binding`/`assets.directory` in `wrangler.jsonc`), and current Cloudflare documentation states that Workers with Static Assets execute behind an internal router Worker that does not forward `ctx.access` to the user Worker — Access still protects the deployment, but the native `ctx.access` API is unavailable to application code in this topology. Production authentication therefore derives identity from the `Cf-Access-Jwt-Assertion` header Access attaches to every authenticated request, cryptographically verified with `jose` against Cloudflare's JWKS (`<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs`, fetched via `createRemoteJWKSet`, never hardcoded keys), with explicit issuer (`ACCESS_TEAM_DOMAIN`) and audience (`ACCESS_AUD`) validation and normal JWT expiration enforcement. The verified `sub` claim is used as the application user ID; the verified `email` claim is optional display metadata only. Any verification failure — missing header, bad signature, wrong issuer/audience, expired token, or JWKS retrieval failure — fails closed to unauthenticated without distinguishing the reason to the client. `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` are deployment configuration (`wrangler.jsonc` `vars`), never client-supplied, and missing/placeholder configuration fails closed rather than falling back to any identity.
 
-If `ctx.access` is unavailable, or Access returns no identity, the application MUST treat the request as unauthenticated. It MUST NOT fall back to an anonymous or hard-coded identity. Absence of a valid Access context always fails closed.
+**Local development:** `npm run dev` uses a fixed synthetic development identity (`local-development-user`), selected exclusively by the trusted, build-time `dev` flag (`$app/environment`) — never by request-controlled input (headers, cookies, query parameters) — so local development requires no Cloudflare OTP. This is an intentional, documented difference from production, not a security bypass: the same flag can never evaluate to `true` in a deployed Worker.
+
+Application code does not parse or validate Access JWTs itself outside the small `CloudflareAccessJwtAuthenticationContext` boundary described above; the rest of the application only ever consumes the resulting application-owned `AuthenticatedUser` via `event.locals.user`.
+
+Absence of a valid production identity (missing/invalid JWT, missing configuration) MUST be treated as unauthenticated. Production MUST NOT fall back to an anonymous, hard-coded, or development identity. Absence of a valid identity always fails closed.
 
 Email addresses may be used for display purposes but MUST NOT be used as persistent primary identifiers for application data.
 
@@ -1163,7 +1167,7 @@ Mutation endpoints return the resulting UI-useful state (updated Watchlist metad
 
 ### 24.2 Authentication
 
-Every endpoint above requires an authenticated user, derived exclusively from `event.locals.user.id` (populated by the TASK-008 server hook from Cloudflare Access). A request with no authenticated user receives `401 UNAUTHENTICATED`. The user ID is never accepted from a query parameter, request body, or URL path segment.
+Every endpoint above requires an authenticated user, derived exclusively from `event.locals.user.id` (populated by the server hook introduced in TASK-008 and updated by TASK-026 — see §8.2 — from Cloudflare Access in production, or the synthetic development identity locally). A request with no authenticated user receives `401 UNAUTHENTICATED`. The user ID is never accepted from a query parameter, request body, or URL path segment.
 
 ### 24.3 API Error and Warning Shape
 

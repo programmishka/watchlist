@@ -3,8 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Mocked UI E2E suite (TASK-018): `npm run dev` is sufficient because every
  * `/api/*` request used by these tests is intercepted in the browser before
- * it reaches the SvelteKit server, so the missing Cloudflare KV/Access
- * bindings under plain `vite dev` are never exercised.
+ * it reaches the SvelteKit server, so real Cloudflare Access/KV behavior is
+ * never exercised regardless of what `npm run dev` itself provides.
  */
 export default defineConfig({
 	testDir: './tests/e2e',

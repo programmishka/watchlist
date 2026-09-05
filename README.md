@@ -23,28 +23,60 @@ Start the local development server:
 npm run dev
 ```
 
+## Authentication
+
+Production authentication is Cloudflare Access (Email One-Time PIN), verified
+server-side from the `Cf-Access-Jwt-Assertion` header (see `ARCHITECTURE.md`
+§8.2 and `docs/tasks/026-cloudflare-access-jwt-authentication.md`). No login
+is implemented by the application itself.
+
+`npm run dev` authenticates every request as a fixed synthetic local user
+(`local-development-user`) — no Cloudflare login is required. This identity
+is selected only through the build-time SvelteKit `dev` flag and can never be
+triggered by a request header, cookie, or query parameter, in local
+development or in production. `npm run dev` also has working `WATCHLIST_KV`
+(local Miniflare-backed storage under `.wrangler/`, isolated from production)
+via the Cloudflare adapter's dev-time platform emulation, so Watchlists,
+stocks, Target Prices, filtering, sorting, and investment allocation are all
+usable locally without any Cloudflare account.
+
+Required production configuration (`wrangler.jsonc` `vars`, currently
+placeholder values — see below):
+
+```text
+ACCESS_TEAM_DOMAIN   e.g. https://<team-name>.cloudflareaccess.com
+ACCESS_AUD           this Worker's Access Application Audience (AUD) tag
+WATCHLIST_KV         the production KV namespace binding
+```
+
+Missing or placeholder `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` values make
+production authentication fail closed (every request is treated as
+unauthenticated) rather than accepting an unverifiable request.
+
 ## Previewing Against the Cloudflare Runtime
 
-`npm run dev` does not provide Cloudflare bindings (KV, Access) or run under
-`workerd`. The `/api/*` routes require the real `WATCHLIST_KV` binding to
-construct their application services and will fail under plain `npm run dev`.
-To exercise the full server API locally, build and preview the actual Worker:
+Build and run the actual Worker under `workerd`:
 
 ```sh
 npm run build
 npm run preview
 ```
 
-`wrangler.jsonc` configures a synthetic local development identity
-(`access.dev`) so `npm run preview` simulates being authenticated via
-Cloudflare Access, without a real login. This is local-only and has no
-effect in production, where Cloudflare Access performs real authentication.
+`npm run preview` runs the _built_ Worker, so it follows the same code path
+as production — the local synthetic development identity does not apply.
+Since there is no real Cloudflare Access session available locally, and no
+current, documented way to simulate the `Cf-Access-Jwt-Assertion` header
+under `wrangler dev`, every request to `npm run preview` is correctly
+unauthenticated (`401`). This is sufficient to verify the production
+fail-closed path locally, but not a full authenticated round trip — that can
+only be exercised after a real deployment behind a real Cloudflare Access
+application.
 
 In short:
 
 ```text
-npm run dev     -> UI/basic Vite development, no Cloudflare bindings
-npm run preview -> Access + KV + Yahoo/Frankfurter + full server API, under workerd
+npm run dev     -> synthetic local user, real local KV, no Cloudflare account needed
+npm run preview -> production auth code path under workerd; always unauthenticated locally
 ```
 
 ## Testing
@@ -114,3 +146,20 @@ npm run build
 ## Deployment
 
 Production deployment targets Cloudflare Workers. See `ARCHITECTURE.md` for architectural details.
+
+Before deploying, manually configure the real Cloudflare Access values in
+`wrangler.jsonc` (`vars.ACCESS_TEAM_DOMAIN`, `vars.ACCESS_AUD` — from the
+Access application already created for this Worker in the Cloudflare Zero
+Trust dashboard) and run `npm run gen` to refresh `worker-configuration.d.ts`.
+This project does not automate Cloudflare account configuration or
+deployment.
+
+### Post-Deployment Smoke Test
+
+After deploying with the real values configured:
+
+1. Open the `workers.dev` URL in an incognito/private browser window.
+2. Enter an allowlisted email address and confirm Cloudflare Access sends a One-Time PIN.
+3. Enter the PIN and confirm the Watchlist UI loads (not "Authentication is required.").
+4. Create or load a Watchlist and confirm it persists — this exercises `user:<verified-sub>:watchlists` in production `WATCHLIST_KV`, keyed by the JWT's verified `sub`, never by email.
+5. Attempt the same flow with a non-allowlisted email and confirm Cloudflare Access itself blocks the login before the application is reached.
