@@ -1,6 +1,11 @@
 <script lang="ts">
-	import type { WatchlistStock } from '$lib/client/watchlistApi';
-	import { formatNumber, formatPercentage, MISSING_VALUE_PLACEHOLDER } from '$lib/client/format';
+	import type { StockAllocationResponse, WatchlistStock } from '$lib/client/watchlistApi';
+	import {
+		formatNumber,
+		formatPercentage,
+		formatWholeEuro,
+		MISSING_VALUE_PLACEHOLDER
+	} from '$lib/client/format';
 	import type { WatchlistSort, WatchlistSortColumn } from '$lib/client/watchlistSort';
 	import TargetPriceCell, {
 		type TargetPriceSaveResult
@@ -10,12 +15,21 @@
 		stocks: WatchlistStock[];
 		sort?: WatchlistSort;
 		busy?: boolean;
+		allocationBySymbol?: Map<string, StockAllocationResponse>;
 		onSort: (column: WatchlistSortColumn) => void;
 		onRemove: (symbol: string) => void;
 		onSaveTargetPrice: (symbol: string, targetPrice: number) => Promise<TargetPriceSaveResult>;
 	}
 
-	let { stocks, sort, busy = false, onSort, onRemove, onSaveTargetPrice }: Props = $props();
+	let {
+		stocks,
+		sort,
+		busy = false,
+		allocationBySymbol,
+		onSort,
+		onRemove,
+		onSaveTargetPrice
+	}: Props = $props();
 
 	const SORTABLE_COLUMNS: { key: WatchlistSortColumn; label: string; numeric: boolean }[] = [
 		{ key: 'symbol', label: 'Symbol', numeric: false },
@@ -61,6 +75,7 @@
 						</button>
 					</th>
 				{/each}
+				<th scope="col" class="numeric">Savings Amount</th>
 				<th scope="col">Delete</th>
 			</tr>
 		</thead>
@@ -82,6 +97,9 @@
 						/>
 					</td>
 					<td class="numeric">{formatPercentage(stock.distanceToTarget)}</td>
+					<td class="numeric">
+						{formatWholeEuro(allocationBySymbol?.get(stock.symbol)?.savingsAmount)}
+					</td>
 					<td>
 						<button
 							type="button"

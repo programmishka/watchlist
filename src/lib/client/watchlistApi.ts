@@ -44,6 +44,20 @@ export interface TargetPriceMutationResponse {
 	warnings: WatchlistWarning[];
 }
 
+/** Per-symbol entry of `POST /api/watchlists/{watchlistId}/investment-allocation` (TASK-015), reused as-is by TASK-024. */
+export interface StockAllocationResponse {
+	symbol: string;
+	factor: number;
+	savingsAmount: number;
+}
+
+/** Response shape of `POST /api/watchlists/{watchlistId}/investment-allocation` (TASK-015), reused as-is by TASK-024. */
+export interface InvestmentAllocationResponse {
+	totalSavings: number;
+	invested: number;
+	allocations: StockAllocationResponse[];
+}
+
 /** Client-side representation of the stable API error shape, preserving `code`/`message`/HTTP status. */
 export class WatchlistApiError extends Error {
 	readonly code: string;
@@ -137,6 +151,25 @@ export function setTargetPrice(
 			method: 'PUT',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ targetPrice })
+		}
+	);
+}
+
+/**
+ * Calls `POST /api/watchlists/{watchlistId}/investment-allocation` (TASK-015),
+ * sending only `totalSavings` as the business payload. The server determines
+ * the complete allocation scope from the Watchlist itself (TASK-024 §9-10).
+ */
+export function calculateInvestmentAllocation(
+	watchlistId: string,
+	totalSavings: number
+): Promise<InvestmentAllocationResponse> {
+	return requestJson<InvestmentAllocationResponse>(
+		`/api/watchlists/${encodeURIComponent(watchlistId)}/investment-allocation`,
+		{
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ totalSavings })
 		}
 	);
 }

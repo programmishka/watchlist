@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatNumber, formatPercentage, MISSING_VALUE_PLACEHOLDER } from './format';
+import {
+	formatNumber,
+	formatPercentage,
+	formatWholeEuro,
+	MISSING_VALUE_PLACEHOLDER
+} from './format';
 
 const LOCALE = 'en-US';
 
@@ -37,5 +42,19 @@ describe('formatPercentage', () => {
 
 	it('formats a missing value as the placeholder', () => {
 		expect(formatPercentage(undefined, LOCALE)).toBe(MISSING_VALUE_PLACEHOLDER);
+	});
+});
+
+describe('formatWholeEuro', () => {
+	it('formats a whole-Euro amount', () => {
+		expect(formatWholeEuro(320, LOCALE)).toBe('€320');
+	});
+
+	it('formats a calculated zero as a real value rather than treating it as missing', () => {
+		expect(formatWholeEuro(0, LOCALE)).toBe('€0');
+	});
+
+	it('formats a missing value as the placeholder', () => {
+		expect(formatWholeEuro(undefined, LOCALE)).toBe(MISSING_VALUE_PLACEHOLDER);
 	});
 });

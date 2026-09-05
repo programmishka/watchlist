@@ -13,6 +13,7 @@ const EXPECTED_COLUMNS = [
 	'Currency',
 	'Target Price',
 	'Distance to Target',
+	'Savings Amount',
 	'Delete'
 ];
 
@@ -37,7 +38,6 @@ test.describe('Watchlist table', () => {
 		const table = page.getByRole('table');
 		await expect(table).toBeVisible();
 		await expect(table.getByRole('columnheader')).toHaveText(EXPECTED_COLUMNS);
-		await expect(page.getByRole('columnheader', { name: 'Savings Amount' })).toHaveCount(0);
 	});
 
 	test('renders representative rows in the order returned by the server', async ({ page }) => {

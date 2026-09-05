@@ -25,3 +25,21 @@ export function formatPercentage(value: number | undefined, locale?: string): st
 		maximumFractionDigits: 2
 	}).format(value);
 }
+
+/**
+ * Locale-aware whole-Euro formatting (TASK-024 §16-17). `value` must already
+ * be the fully computed whole-Euro amount to display; a calculated `0` is a
+ * real value and is formatted normally, distinct from the missing-value
+ * placeholder used before any calculation exists.
+ */
+export function formatWholeEuro(value: number | undefined, locale?: string): string {
+	if (value === undefined || Number.isNaN(value)) {
+		return MISSING_VALUE_PLACEHOLDER;
+	}
+	return new Intl.NumberFormat(locale, {
+		style: 'currency',
+		currency: 'EUR',
+		maximumFractionDigits: 0,
+		minimumFractionDigits: 0
+	}).format(value);
+}

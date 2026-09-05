@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
 	WatchlistApiError,
+	type InvestmentAllocationResponse,
 	type TargetPriceMutationResponse,
 	type WatchlistView,
 	type WatchlistsMetadataResponse
 } from './watchlistApi';
 import {
 	addStockToActiveWatchlist,
+	calculateInvestmentAllocationForActiveWatchlist,
 	chooseInitialActiveWatchlistId,
 	createWatchlistAndActivate,
 	deleteActiveWatchlistAndTransition,
@@ -42,6 +44,7 @@ function fakeApi(overrides?: Partial<WatchlistShellApi>): WatchlistShellApi {
 		addStock: vi.fn(),
 		removeStock: vi.fn(),
 		setTargetPrice: vi.fn(),
+		calculateInvestmentAllocation: vi.fn(),
 		...overrides
 	};
 }
@@ -668,5 +671,58 @@ describe('setTargetPriceForActiveStock', () => {
 		expect(updatedView?.stocks[0].targetPrice).toBe(250);
 		expect(updatedView?.stocks[0].distanceToTarget).toBeUndefined();
 		expect(warningMessage).toBe('Current market data is temporarily unavailable.');
+	});
+});
+
+describe('calculateInvestmentAllocationForActiveWatchlist', () => {
+	function allocationHandlers() {
+		const calls: string[] = [];
+		return {
+			calls,
+			handlers: {
+				onCalculating: () => calls.push('calculating'),
+				onCalculationFailed: () => calls.push('calculationFailed'),
+				onCalculated: () => calls.push('calculated')
+			}
+		};
+	}
+
+	it('calls the API with the given watchlist id and totalSavings, then reports the result', async () => {
+		const response: InvestmentAllocationResponse = {
+			totalSavings: 1000,
+			invested: 997,
+			allocations: [{ symbol: 'AAPL', factor: 0.8, savingsAmount: 320 }]
+		};
+		const api = fakeApi({ calculateInvestmentAllocation: vi.fn().mockResolvedValue(response) });
+		const { calls, handlers } = allocationHandlers();
+		let received: InvestmentAllocationResponse | undefined;
+
+		await calculateInvestmentAllocationForActiveWatchlist(api, 'wl-1', 1000, {
+			...handlers,
+			onCalculated: (result) => {
+				calls.push('calculated');
+				received = result;
+			}
+		});
+
+		expect(api.calculateInvestmentAllocation).toHaveBeenCalledWith('wl-1', 1000);
+		expect(calls).toEqual(['calculating', 'calculated']);
+		expect(received).toEqual(response);
+	});
+
+	it('reports a calculation failure without calling onCalculated', async () => {
+		const error = new WatchlistApiError('MARKET_DATA_UNAVAILABLE', 'unavailable', 502);
+		const api = fakeApi({ calculateInvestmentAllocation: vi.fn().mockRejectedValue(error) });
+		const onCalculationFailed = vi.fn();
+
+		await calculateInvestmentAllocationForActiveWatchlist(api, 'wl-1', 1000, {
+			onCalculating: () => {},
+			onCalculationFailed,
+			onCalculated: () => {
+				throw new Error('should not be called');
+			}
+		});
+
+		expect(onCalculationFailed).toHaveBeenCalledWith(error);
 	});
 });

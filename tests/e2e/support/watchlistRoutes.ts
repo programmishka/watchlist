@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import type {
+	InvestmentAllocationResponse,
 	TargetPriceMutationResponse,
 	WatchlistsMetadataResponse,
 	WatchlistView
@@ -196,5 +197,32 @@ export async function mockSetTargetPrice(
 		const { status, body } = toJsonResponse(handler(symbol, targetPrice), 200);
 		await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 	});
+	return { calls };
+}
+
+export interface InvestmentAllocationCallRecorder {
+	readonly calls: readonly { totalSavings: number; rawBody: unknown }[];
+}
+
+/** Mocks `POST /api/watchlists/{watchlistId}/investment-allocation` and records every request body. */
+export async function mockCalculateInvestmentAllocation(
+	page: Page,
+	watchlistId: string,
+	handler: (totalSavings: number) => InvestmentAllocationResponse | JsonResponse
+): Promise<InvestmentAllocationCallRecorder> {
+	const calls: { totalSavings: number; rawBody: unknown }[] = [];
+	await page.route(
+		new RegExp(`/api/watchlists/${escapeForRegExp(watchlistId)}/investment-allocation$`),
+		async (route) => {
+			if (route.request().method() !== 'POST') {
+				await route.fallback();
+				return;
+			}
+			const rawBody = route.request().postDataJSON() as { totalSavings: number };
+			calls.push({ totalSavings: rawBody.totalSavings, rawBody });
+			const { status, body } = toJsonResponse(handler(rawBody.totalSavings), 200);
+			await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+		}
+	);
 	return { calls };
 }

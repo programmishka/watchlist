@@ -3,6 +3,7 @@
 	import WatchlistTabs from '$lib/components/WatchlistTabs.svelte';
 	import WatchlistTable from '$lib/components/WatchlistTable.svelte';
 	import type {
+		InvestmentAllocationResponse,
 		WatchlistApiError,
 		WatchlistMetadata,
 		WatchlistView,
@@ -10,6 +11,7 @@
 	} from '$lib/client/watchlistApi';
 	import {
 		addStockToActiveWatchlist,
+		calculateInvestmentAllocationForActiveWatchlist,
 		createWatchlistAndActivate,
 		defaultWatchlistShellApi,
 		deleteActiveWatchlistAndTransition,
@@ -25,6 +27,9 @@
 		type WatchlistSort,
 		type WatchlistSortColumn
 	} from '$lib/client/watchlistSort';
+	import { allocationBySymbol as buildAllocationBySymbol } from '$lib/client/investmentAllocation';
+	import { parseTotalSavingsInput } from '$lib/client/investmentSavingsInput';
+	import { formatWholeEuro } from '$lib/client/format';
 	import type { TargetPriceSaveResult } from '$lib/components/TargetPriceCell.svelte';
 
 	type MetadataStatus = 'loading' | 'loaded' | 'error';
@@ -62,6 +67,18 @@
 	// transitions as the filter, never persisted anywhere.
 	let sort = $state<WatchlistSort | undefined>(undefined);
 
+	// Total Savings input text and the most recent successful investment
+	// allocation (TASK-024 §12/§50): a temporary, unpersisted UI-state result
+	// associated with the active Watchlist. Invalidated (set back to
+	// undefined) whenever a successful mutation changes the business inputs
+	// the allocation was based on, or the active Watchlist itself changes;
+	// never recalculated automatically.
+	let totalSavingsInput = $state('');
+	let allocationInputError = $state<string | undefined>(undefined);
+	let investmentAllocation = $state<InvestmentAllocationResponse | undefined>(undefined);
+	let allocationBusy = $state(false);
+	let allocationError = $state<WatchlistApiError | undefined>(undefined);
+
 	// Any in-flight mutation or content load blocks other management actions
 	// so responses can't resolve out of order and clobber a newer selection.
 	let managementBusy = $derived(
@@ -69,7 +86,8 @@
 			createStatus === 'creating' ||
 			deleteStatus === 'deleting' ||
 			stockMutationBusy ||
-			targetPriceMutationBusy
+			targetPriceMutationBusy ||
+			allocationBusy
 	);
 	let createDisabled = $derived(newWatchlistName.trim().length === 0 || managementBusy);
 	let addStockDisabled = $derived(newStockSymbol.trim().length === 0 || managementBusy);
@@ -86,6 +104,8 @@
 	let stockCountText = $derived(
 		formatStockCount(totalStockCount, filteredStocks.length, isFiltered)
 	);
+
+	let allocationBySymbol = $derived(buildAllocationBySymbol(investmentAllocation));
 
 	onMount(() => {
 		loadInitialWatchlists(defaultWatchlistShellApi, {
@@ -140,6 +160,7 @@
 				activeWatchlistId = watchlistId;
 				companyNameFilter = '';
 				sort = undefined;
+				investmentAllocation = undefined;
 			},
 			onActiveWatchlistLoaded: (view) => {
 				activeView = view;
@@ -176,6 +197,7 @@
 				createStatus = 'idle';
 				companyNameFilter = '';
 				sort = undefined;
+				investmentAllocation = undefined;
 			},
 			onActiveWatchlistLoading: () => {
 				activeViewStatus = 'loading';
@@ -218,6 +240,7 @@
 				deleteStatus = 'idle';
 				companyNameFilter = '';
 				sort = undefined;
+				investmentAllocation = undefined;
 			},
 			onNoWatchlistsRemaining: () => {
 				activeView = undefined;
@@ -255,6 +278,7 @@
 				activeView = view;
 				newStockSymbol = '';
 				stockMutationBusy = false;
+				investmentAllocation = undefined;
 			},
 			onAddFailed: (error) => {
 				stockMutationBusy = false;
@@ -280,6 +304,7 @@
 			onRemoved: (view) => {
 				activeView = view;
 				stockMutationBusy = false;
+				investmentAllocation = undefined;
 			},
 			onRemoveFailed: (error) => {
 				stockMutationBusy = false;
@@ -305,6 +330,9 @@
 				onSaved: (updatedView, marketDataWarningMessage) => {
 					activeView = updatedView;
 					targetPriceMutationBusy = false;
+					// The Target Price itself changed even when the distance refresh
+					// warned (TASK-024 §38), so the allocation is invalidated either way.
+					investmentAllocation = undefined;
 					resolve({ ok: true, warningMessage: marketDataWarningMessage });
 				},
 				onSaveFailed: (error) => {
@@ -313,6 +341,40 @@
 				}
 			});
 		});
+	}
+
+	function handleCalculateAllocation(event: SubmitEvent) {
+		event.preventDefault();
+		if (!activeWatchlistId || managementBusy) {
+			return;
+		}
+
+		const totalSavings = parseTotalSavingsInput(totalSavingsInput);
+		if (totalSavings === undefined) {
+			allocationInputError = 'Enter a whole number of Euros, 0 or greater.';
+			return;
+		}
+		allocationInputError = undefined;
+
+		calculateInvestmentAllocationForActiveWatchlist(
+			defaultWatchlistShellApi,
+			activeWatchlistId,
+			totalSavings,
+			{
+				onCalculating: () => {
+					allocationBusy = true;
+					allocationError = undefined;
+				},
+				onCalculated: (result) => {
+					investmentAllocation = result;
+					allocationBusy = false;
+				},
+				onCalculationFailed: (error) => {
+					allocationBusy = false;
+					allocationError = error;
+				}
+			}
+		);
 	}
 </script>
 
@@ -431,6 +493,47 @@
 					{:else}
 						<h2>{activeView.name}</h2>
 
+						<form class="allocation-form" onsubmit={handleCalculateAllocation}>
+							<label class="allocation-label" for="total-savings">Total savings</label>
+							<input
+								id="total-savings"
+								class="allocation-input"
+								type="text"
+								inputmode="numeric"
+								bind:value={totalSavingsInput}
+								aria-invalid={allocationInputError !== undefined}
+								aria-describedby={allocationInputError || allocationError
+									? 'allocation-feedback'
+									: undefined}
+								disabled={managementBusy}
+								autocomplete="off"
+							/>
+							<button
+								type="submit"
+								class="allocation-button"
+								aria-label="Calculate investment allocation"
+								aria-busy={allocationBusy}
+								disabled={managementBusy}
+							>
+								Calculate
+							</button>
+							{#if investmentAllocation}
+								<span class="invested"
+									>Invested: {formatWholeEuro(investmentAllocation.invested)}</span
+								>
+							{/if}
+						</form>
+
+						{#if allocationInputError}
+							<p id="allocation-feedback" class="status error" role="alert">
+								{allocationInputError}
+							</p>
+						{:else if allocationError}
+							<p id="allocation-feedback" class="status error" role="alert">
+								{allocationError.message}
+							</p>
+						{/if}
+
 						<div class="filter-row">
 							<label class="filter-label" for="company-name-filter"> Filter by company name </label>
 							<input
@@ -449,6 +552,7 @@
 								stocks={visibleStocks}
 								{sort}
 								busy={managementBusy}
+								{allocationBySymbol}
 								onSort={handleSort}
 								onRemove={handleRemoveStock}
 								onSaveTargetPrice={handleSaveTargetPrice}
@@ -606,6 +710,55 @@
 
 	.status.warning {
 		color: #8a5a00;
+	}
+
+	.allocation-form {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.allocation-label {
+		font-size: 0.9rem;
+		color: #444;
+	}
+
+	.allocation-input {
+		flex: 0 1 8rem;
+		min-width: 0;
+		padding: 0.5rem 0.6rem;
+		border: 1px solid #b8b8b8;
+		border-radius: 4px;
+		font: inherit;
+		text-align: right;
+	}
+
+	.allocation-input[aria-invalid='true'] {
+		border-color: #b3261e;
+	}
+
+	.allocation-button {
+		flex: 0 0 auto;
+		padding: 0.5rem 0.9rem;
+		border: 1px solid #1a5fb4;
+		border-radius: 4px;
+		background: #1a5fb4;
+		color: #fff;
+		font: inherit;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.allocation-button:disabled {
+		cursor: default;
+		opacity: 0.6;
+	}
+
+	.invested {
+		font-weight: 600;
+		color: #222;
 	}
 
 	.filter-row {

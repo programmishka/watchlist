@@ -1,5 +1,6 @@
 import {
 	addStock,
+	calculateInvestmentAllocation,
 	createWatchlist,
 	deleteActiveWatchlist,
 	loadWatchlist,
@@ -8,6 +9,7 @@ import {
 	selectActiveWatchlist,
 	setTargetPrice,
 	WatchlistApiError,
+	type InvestmentAllocationResponse,
 	type WatchlistsMetadataResponse,
 	type WatchlistView
 } from './watchlistApi';
@@ -21,6 +23,7 @@ export interface WatchlistShellApi {
 	addStock: typeof addStock;
 	removeStock: typeof removeStock;
 	setTargetPrice: typeof setTargetPrice;
+	calculateInvestmentAllocation: typeof calculateInvestmentAllocation;
 }
 
 export const defaultWatchlistShellApi: WatchlistShellApi = {
@@ -31,7 +34,8 @@ export const defaultWatchlistShellApi: WatchlistShellApi = {
 	deleteActiveWatchlist,
 	addStock,
 	removeStock,
-	setTargetPrice
+	setTargetPrice,
+	calculateInvestmentAllocation
 };
 
 function toWatchlistApiError(error: unknown): WatchlistApiError {
@@ -345,5 +349,34 @@ export async function setTargetPriceForActiveStock(
 		handlers.onSaved({ ...activeView, stocks }, marketDataWarning?.message);
 	} catch (error) {
 		handlers.onSaveFailed(toWatchlistApiError(error));
+	}
+}
+
+export interface CalculateInvestmentAllocationHandlers {
+	onCalculating: () => void;
+	onCalculated: (result: InvestmentAllocationResponse) => void;
+	onCalculationFailed: (error: WatchlistApiError) => void;
+}
+
+/**
+ * Implements TASK-024 §53: calls the investment-allocation endpoint for the
+ * given Watchlist and totalSavings and reports the result through handlers.
+ * It never reads or mutates Watchlist stock data — the caller (the page,
+ * per §50) owns associating the result with displayed stocks and the
+ * allocation's temporary UI-state lifecycle, including invalidation.
+ */
+export async function calculateInvestmentAllocationForActiveWatchlist(
+	api: WatchlistShellApi,
+	watchlistId: string,
+	totalSavings: number,
+	handlers: CalculateInvestmentAllocationHandlers
+): Promise<void> {
+	handlers.onCalculating();
+
+	try {
+		const result = await api.calculateInvestmentAllocation(watchlistId, totalSavings);
+		handlers.onCalculated(result);
+	} catch (error) {
+		handlers.onCalculationFailed(toWatchlistApiError(error));
 	}
 }

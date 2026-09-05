@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	addStock,
+	calculateInvestmentAllocation,
 	createWatchlist,
 	deleteActiveWatchlist,
 	loadWatchlist,
@@ -378,5 +379,80 @@ describe('setTargetPrice', () => {
 			code: 'INVALID_TARGET_PRICE',
 			status: 400
 		});
+	});
+});
+
+describe('calculateInvestmentAllocation', () => {
+	it('issues a POST to /api/watchlists/{watchlistId}/investment-allocation with only totalSavings and parses the response', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, {
+				totalSavings: 1000,
+				invested: 997,
+				allocations: [{ symbol: 'AAPL', factor: 0.8, savingsAmount: 320 }]
+			})
+		);
+
+		const result = await calculateInvestmentAllocation('wl-1', 1000);
+
+		expect(fetch).toHaveBeenCalledWith('/api/watchlists/wl-1/investment-allocation', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ totalSavings: 1000 })
+		});
+		expect(result).toEqual({
+			totalSavings: 1000,
+			invested: 997,
+			allocations: [{ symbol: 'AAPL', factor: 0.8, savingsAmount: 320 }]
+		});
+	});
+
+	it('URL-encodes the watchlist id', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, { totalSavings: 0, invested: 0, allocations: [] })
+		);
+
+		await calculateInvestmentAllocation('a/b', 0);
+
+		expect(fetch).toHaveBeenCalledWith(
+			'/api/watchlists/a%2Fb/investment-allocation',
+			expect.objectContaining({ method: 'POST' })
+		);
+	});
+
+	it('sends only the numeric totalSavings business payload, never symbols or watchlist scope', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(200, { totalSavings: 0, invested: 0, allocations: [] })
+		);
+
+		await calculateInvestmentAllocation('wl-1', 0);
+
+		const [, init] = vi.mocked(fetch).mock.calls[0];
+		expect(JSON.parse((init as RequestInit).body as string)).toEqual({ totalSavings: 0 });
+	});
+
+	it('throws a WatchlistApiError with the stable code/message/status when totalSavings is invalid', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(400, {
+				error: { code: 'INVALID_TOTAL_SAVINGS', message: 'Total savings must be a whole number.' }
+			})
+		);
+
+		await expect(calculateInvestmentAllocation('wl-1', -1)).rejects.toMatchObject({
+			name: 'WatchlistApiError',
+			code: 'INVALID_TOTAL_SAVINGS',
+			status: 400
+		});
+	});
+
+	it('throws a WatchlistApiError when the watchlist does not exist', async () => {
+		vi.mocked(fetch).mockResolvedValue(
+			jsonResponse(404, {
+				error: { code: 'WATCHLIST_NOT_FOUND', message: 'The watchlist does not exist.' }
+			})
+		);
+
+		await expect(calculateInvestmentAllocation('missing', 1000)).rejects.toBeInstanceOf(
+			WatchlistApiError
+		);
 	});
 });
