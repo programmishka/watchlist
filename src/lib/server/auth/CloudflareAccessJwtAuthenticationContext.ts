@@ -10,6 +10,19 @@ import type { AuthenticationContext, AuthenticationResult } from './Authenticati
  */
 const ACCESS_JWT_HEADER = 'Cf-Access-Jwt-Assertion';
 
+/**
+ * `ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` are configured only as Cloudflare
+ * dashboard runtime variables, so `wrangler types` cannot discover them and
+ * they never appear in the generated `Env` (TASK-027). This narrow,
+ * application-owned type lets the production authentication factory depend
+ * only on the two values it actually needs, independent of `Env`'s other
+ * (generated) bindings such as `WATCHLIST_KV`/`ASSETS`.
+ */
+export interface AccessEnvironment {
+	ACCESS_TEAM_DOMAIN?: string;
+	ACCESS_AUD?: string;
+}
+
 export interface CloudflareAccessJwtAuthenticationContextOptions {
 	/** The incoming request; only the `Cf-Access-Jwt-Assertion` header is read. */
 	request: Request;
@@ -96,7 +109,7 @@ const UNAUTHENTICATED_CONTEXT: AuthenticationContext = {
  */
 export function createCloudflareAccessJwtAuthenticationContext(
 	request: Request,
-	env: { ACCESS_TEAM_DOMAIN?: string; ACCESS_AUD?: string } | undefined
+	env: AccessEnvironment | undefined
 ): AuthenticationContext {
 	const teamDomain = env?.ACCESS_TEAM_DOMAIN?.replace(/\/+$/, '');
 	const audience = env?.ACCESS_AUD;
