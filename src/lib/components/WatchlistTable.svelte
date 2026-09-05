@@ -103,7 +103,7 @@
 					<td>
 						<button
 							type="button"
-							class="remove-button"
+							class="btn btn-destructive btn-compact"
 							aria-label={`Remove ${stock.symbol}`}
 							aria-busy={busy}
 							disabled={busy}
@@ -140,6 +140,7 @@
 		white-space: normal;
 		min-width: 10rem;
 		max-width: 20rem;
+		word-break: break-word;
 	}
 
 	td.target-price-cell {
@@ -148,11 +149,16 @@
 
 	thead th {
 		border-bottom: 2px solid #d0d0d0;
+		background: #f7f7f8;
 		font-weight: 600;
 	}
 
 	tbody tr {
 		border-bottom: 1px solid #eee;
+	}
+
+	tbody tr:hover {
+		background: #fafafa;
 	}
 
 	.numeric {
@@ -183,20 +189,5 @@
 
 	.sort-indicator {
 		font-size: 0.85em;
-	}
-
-	.remove-button {
-		padding: 0.35rem 0.6rem;
-		border: 1px solid #b3261e;
-		border-radius: 4px;
-		background: #fff;
-		color: #b3261e;
-		font: inherit;
-		cursor: pointer;
-	}
-
-	.remove-button:disabled {
-		cursor: default;
-		opacity: 0.5;
 	}
 </style>

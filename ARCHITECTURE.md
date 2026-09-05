@@ -1361,6 +1361,17 @@ Because a calculated allocation reflects the Watchlist's business inputs (member
 
 An in-flight calculation sets a local `allocationBusy` flag that is folded into the page's existing single `managementBusy` flag (§26.2-§26.4), so a calculation in progress disables tab switching, Watchlist create/delete, stock add/remove, and Target Price editing, and conversely those other mutations disable the Calculate button/Total Savings input — reusing the established serialized-mutation strategy rather than introducing per-feature concurrency handling or reconciling out-of-order responses.
 
+### 26.8 Final UI Polish Conventions (TASK-025)
+
+TASK-025 introduced no new business behavior; it consolidated the visual language accumulated across TASK-016 through TASK-024 into a small set of durable, global conventions, kept in native CSS (no framework, no design-token system):
+
+* **Shared CSS custom properties** (`:root` in `src/app.css`): `--color-text`, `--color-text-muted`, `--color-border`, `--color-primary`, `--color-danger`, `--color-warning`, and matching `-bg` tints, plus `--radius`. Component-scoped `<style>` blocks reference these instead of repeating hex literals, so a future palette change has one place to happen.
+* **Shared button vocabulary**: global (unscoped) classes `.btn` + one of `.btn-primary` / `.btn-destructive`, optionally combined with `.btn-compact` for table-row actions (e.g. the per-row Delete button). This replaced five near-duplicate component-local button rules (create/add-stock/allocation/delete/remove) with one definition per role.
+* **Shared text-input baseline**: the global `.field-input` class (height, border, radius, disabled/invalid styling) applied to Watchlist name, Stock symbol, Filter by company name, and Total savings. The Target Price input intentionally keeps its own smaller, component-local sizing (§26.4) because it lives inside a table cell.
+* **Warning vs. error, beyond color**: both use a `.status` base plus either `.status-error` or `.status-warning` (left accent border + bold weight, not color alone). Semantically, mutation/load errors keep `role="alert"` (assertive); non-fatal data warnings (`FX_PROVIDER_UNAVAILABLE`, and the Target Price row-level `MARKET_DATA_UNAVAILABLE` case) use `role="status"` (polite) instead of no role, so they are discoverable by assistive technology without interrupting like an alert.
+* **Empty-state presentation**: "No watchlist has been created yet." and "This watchlist is empty." share a bordered `.empty-state` treatment; "No stocks match the current filter." intentionally stays a plain, `font-style: italic` line via `.filtered-empty` so a temporarily-filtered watchlist is never visually confused with a genuinely empty one (§12.4, §24 of the task).
+* **Viewport strategy confirmed**: manual and Playwright verification target 375px (mobile), 768px (intermediate), and 1280px (desktop) as the three representative widths (§14). No additional breakpoints were introduced. The table's existing horizontal-scroll-in-container strategy (§14.2) is unchanged and, by design, can still activate on wider viewports once all ten columns exceed the content width — this is the same accepted mechanism, not a new mobile-only behavior.
+
 ---
 
 ## 27. Testing Strategy
@@ -1418,7 +1429,9 @@ They use Playwright request routing to return deterministic responses for `/api/
 
 Real `workerd`/provider verification (Cloudflare Access, KV, Yahoo Finance, Frankfurter) remains a separate, manual deployment smoke-test concern rather than part of the normal Playwright suite. This decision may be revisited as the application grows.
 
-Desktop and narrow/mobile UI behavior (tab strip, responsive table scrolling, page-level overflow) are covered by Playwright projects using distinct viewports rather than relying on a developer's local browser window dimensions.
+Desktop and narrow/mobile UI behavior (tab strip, responsive table scrolling, page-level overflow) are covered by Playwright projects using distinct viewports rather than relying on a developer's local browser window dimensions. `tests/e2e/ui-polish.spec.ts` (TASK-025) additionally covers cross-feature UI state (a complete populated page, warning/error distinction, an error-recovery flow, a keyboard-only flow, and a 768px intermediate-viewport check) that does not belong to one single focused feature spec.
+
+`playwright.config.ts` pins `workers: 4` (TASK-025 §53-54). TASK-023/024 reported intermittent failures under high parallel load; TASK-025 reproduced this against an 8-core development machine (2 of 3 full-suite runs failed a different test at 8 workers, versus 0 failures across 6+ full-suite runs at 4 workers) before pinning the value, so a future change to this number should be similarly evidence-based rather than adjusted on suspicion alone.
 
 ---
 

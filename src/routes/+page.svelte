@@ -386,14 +386,16 @@
 	{#if metadataStatus === 'loading'}
 		<p class="status">Loading watchlists…</p>
 	{:else if metadataStatus === 'error'}
-		<p class="status error">{metadataError?.message ?? 'Failed to load watchlists.'}</p>
+		<p class="status status-error" role="alert">
+			{metadataError?.message ?? 'Failed to load watchlists.'}
+		</p>
 	{:else}
-		<section class="management">
+		<section class="management" aria-label="Watchlist management">
 			<form class="create-form" onsubmit={handleCreateSubmit}>
 				<label class="create-label" for="new-watchlist-name">Watchlist name</label>
 				<input
 					id="new-watchlist-name"
-					class="create-input"
+					class="field-input create-input"
 					type="text"
 					bind:value={newWatchlistName}
 					disabled={managementBusy}
@@ -401,7 +403,7 @@
 				/>
 				<button
 					type="submit"
-					class="create-button"
+					class="btn btn-primary"
 					aria-label="Add watchlist"
 					aria-busy={createStatus === 'creating'}
 					disabled={createDisabled}
@@ -411,7 +413,9 @@
 			</form>
 
 			{#if createError}
-				<p class="status error" role="alert">Couldn't create watchlist: {createError.message}</p>
+				<p class="status status-error" role="alert">
+					Couldn't create watchlist: {createError.message}
+				</p>
 			{/if}
 
 			<div class="tabs-row">
@@ -428,7 +432,7 @@
 
 				<button
 					type="button"
-					class="delete-button"
+					class="btn btn-destructive"
 					onclick={handleDeleteClick}
 					disabled={watchlists.length === 0 || managementBusy}
 					aria-busy={deleteStatus === 'deleting'}
@@ -438,18 +442,20 @@
 			</div>
 
 			{#if deleteError}
-				<p class="status error" role="alert">Couldn't delete watchlist: {deleteError.message}</p>
+				<p class="status status-error" role="alert">
+					Couldn't delete watchlist: {deleteError.message}
+				</p>
 			{/if}
 
 			{#if tabSwitchError}
-				<p class="status error" role="alert">
+				<p class="status status-error" role="alert">
 					Couldn't switch watchlist: {tabSwitchError.message}
 				</p>
 			{/if}
 		</section>
 
 		{#if watchlists.length === 0}
-			<p class="status">No watchlist has been created yet.</p>
+			<p class="status empty-state">No watchlist has been created yet.</p>
 		{:else}
 			<div class="content">
 				{#if activeWatchlistId}
@@ -457,7 +463,7 @@
 						<label class="add-stock-label" for="new-stock-symbol">Stock symbol</label>
 						<input
 							id="new-stock-symbol"
-							class="add-stock-input"
+							class="field-input add-stock-input"
 							type="text"
 							bind:value={newStockSymbol}
 							disabled={managementBusy}
@@ -465,7 +471,7 @@
 						/>
 						<button
 							type="submit"
-							class="add-stock-button"
+							class="btn btn-primary"
 							aria-label="Add stock"
 							aria-busy={stockMutationBusy}
 							disabled={addStockDisabled}
@@ -475,78 +481,84 @@
 					</form>
 
 					{#if stockMutationError}
-						<p class="status error" role="alert">{stockMutationError.message}</p>
+						<p class="status status-error" role="alert">{stockMutationError.message}</p>
 					{/if}
 				{/if}
 
 				{#if activeViewStatus === 'loading'}
 					<p class="status">Loading watchlist…</p>
 				{:else if activeViewStatus === 'error'}
-					<p class="status error">{activeViewError?.message ?? 'Failed to load watchlist.'}</p>
+					<p class="status status-error" role="alert">
+						{activeViewError?.message ?? 'Failed to load watchlist.'}
+					</p>
 				{:else if activeViewStatus === 'loaded' && activeView}
 					{#each activeView.warnings as warning (warning.code)}
-						<p class="status warning">{warning.message}</p>
+						<p class="status status-warning" role="status">{warning.message}</p>
 					{/each}
 
 					{#if activeView.stocks.length === 0}
-						<p class="status">This watchlist is empty.</p>
+						<p class="status empty-state">This watchlist is empty.</p>
 					{:else}
-						<h2>{activeView.name}</h2>
+						<h2 class="watchlist-heading">{activeView.name}</h2>
 
-						<form class="allocation-form" onsubmit={handleCalculateAllocation}>
-							<label class="allocation-label" for="total-savings">Total savings</label>
-							<input
-								id="total-savings"
-								class="allocation-input"
-								type="text"
-								inputmode="numeric"
-								bind:value={totalSavingsInput}
-								aria-invalid={allocationInputError !== undefined}
-								aria-describedby={allocationInputError || allocationError
-									? 'allocation-feedback'
-									: undefined}
-								disabled={managementBusy}
-								autocomplete="off"
-							/>
-							<button
-								type="submit"
-								class="allocation-button"
-								aria-label="Calculate investment allocation"
-								aria-busy={allocationBusy}
-								disabled={managementBusy}
-							>
-								Calculate
-							</button>
-							{#if investmentAllocation}
-								<span class="invested"
-									>Invested: {formatWholeEuro(investmentAllocation.invested)}</span
+						<div class="table-controls">
+							<form class="allocation-form" onsubmit={handleCalculateAllocation}>
+								<label class="allocation-label" for="total-savings">Total savings</label>
+								<input
+									id="total-savings"
+									class="field-input allocation-input"
+									type="text"
+									inputmode="numeric"
+									bind:value={totalSavingsInput}
+									aria-invalid={allocationInputError !== undefined}
+									aria-describedby={allocationInputError || allocationError
+										? 'allocation-feedback'
+										: undefined}
+									disabled={managementBusy}
+									autocomplete="off"
+								/>
+								<button
+									type="submit"
+									class="btn btn-primary"
+									aria-label="Calculate investment allocation"
+									aria-busy={allocationBusy}
+									disabled={managementBusy}
 								>
+									Calculate
+								</button>
+								{#if investmentAllocation}
+									<span class="invested"
+										>Invested: {formatWholeEuro(investmentAllocation.invested)}</span
+									>
+								{/if}
+							</form>
+
+							{#if allocationInputError}
+								<p id="allocation-feedback" class="status status-error" role="alert">
+									{allocationInputError}
+								</p>
+							{:else if allocationError}
+								<p id="allocation-feedback" class="status status-error" role="alert">
+									{allocationError.message}
+								</p>
 							{/if}
-						</form>
 
-						{#if allocationInputError}
-							<p id="allocation-feedback" class="status error" role="alert">
-								{allocationInputError}
-							</p>
-						{:else if allocationError}
-							<p id="allocation-feedback" class="status error" role="alert">
-								{allocationError.message}
-							</p>
-						{/if}
-
-						<div class="filter-row">
-							<label class="filter-label" for="company-name-filter"> Filter by company name </label>
-							<input
-								id="company-name-filter"
-								class="filter-input"
-								type="text"
-								bind:value={companyNameFilter}
-								autocomplete="off"
-							/>
+							<div class="filter-row">
+								<label class="filter-label" for="company-name-filter">
+									Filter by company name
+								</label>
+								<input
+									id="company-name-filter"
+									class="field-input filter-input"
+									type="text"
+									bind:value={companyNameFilter}
+									autocomplete="off"
+								/>
+							</div>
 						</div>
 
 						{#if filteredStocks.length === 0}
-							<p class="status">No stocks match the current filter.</p>
+							<p class="status filtered-empty">No stocks match the current filter.</p>
 						{:else}
 							<WatchlistTable
 								stocks={visibleStocks}
@@ -580,7 +592,14 @@
 
 	h1 {
 		font-size: 1.5rem;
+		font-weight: 700;
 		margin: 0;
+	}
+
+	.watchlist-heading {
+		font-size: 1.15rem;
+		font-weight: 600;
+		margin: 0 0 0.75rem;
 	}
 
 	.content {
@@ -597,40 +616,21 @@
 
 	.add-stock-label {
 		font-size: 0.9rem;
-		color: #444;
+		color: var(--color-text-muted);
 	}
 
 	.add-stock-input {
 		flex: 1 1 12rem;
 		min-width: 0;
-		padding: 0.5rem 0.6rem;
-		border: 1px solid #b8b8b8;
-		border-radius: 4px;
-		font: inherit;
-	}
-
-	.add-stock-button {
-		flex: 0 0 auto;
-		min-width: 2.5rem;
-		padding: 0.5rem 0.9rem;
-		border: 1px solid #1a5fb4;
-		border-radius: 4px;
-		background: #1a5fb4;
-		color: #fff;
-		font: inherit;
-		font-weight: 600;
-		cursor: pointer;
-	}
-
-	.add-stock-button:disabled {
-		cursor: default;
-		opacity: 0.6;
 	}
 
 	.management {
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
+		padding-bottom: 1rem;
+		margin-bottom: 1.25rem;
+		border-bottom: 1px solid var(--color-border-subtle);
 	}
 
 	.create-form {
@@ -642,34 +642,12 @@
 
 	.create-label {
 		font-size: 0.9rem;
-		color: #444;
+		color: var(--color-text-muted);
 	}
 
 	.create-input {
 		flex: 1 1 12rem;
 		min-width: 0;
-		padding: 0.5rem 0.6rem;
-		border: 1px solid #b8b8b8;
-		border-radius: 4px;
-		font: inherit;
-	}
-
-	.create-button {
-		flex: 0 0 auto;
-		min-width: 2.5rem;
-		padding: 0.5rem 0.9rem;
-		border: 1px solid #1a5fb4;
-		border-radius: 4px;
-		background: #1a5fb4;
-		color: #fff;
-		font: inherit;
-		font-weight: 600;
-		cursor: pointer;
-	}
-
-	.create-button:disabled {
-		cursor: default;
-		opacity: 0.6;
 	}
 
 	.tabs-row {
@@ -684,32 +662,19 @@
 		min-width: 0;
 	}
 
-	.delete-button {
-		flex: 0 0 auto;
-		padding: 0.5rem 0.9rem;
-		border: 1px solid #b3261e;
-		border-radius: 4px;
-		background: #fff;
-		color: #b3261e;
-		font: inherit;
-		cursor: pointer;
-	}
-
-	.delete-button:disabled {
-		cursor: default;
-		opacity: 0.5;
-	}
-
 	.status {
-		color: #444;
+		color: var(--color-text-muted);
 	}
 
-	.status.error {
-		color: #b3261e;
-	}
-
-	.status.warning {
-		color: #8a5a00;
+	/* Groups the table-scoped calculation and presentation controls
+	   (allocation, filter) together, distinct from the stock-add mutation
+	   above and the table below (TASK-025 §4). */
+	.table-controls {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding-top: 0.5rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.allocation-form {
@@ -717,48 +682,22 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
-		margin-bottom: 0.75rem;
 	}
 
 	.allocation-label {
 		font-size: 0.9rem;
-		color: #444;
+		color: var(--color-text-muted);
 	}
 
 	.allocation-input {
 		flex: 0 1 8rem;
 		min-width: 0;
-		padding: 0.5rem 0.6rem;
-		border: 1px solid #b8b8b8;
-		border-radius: 4px;
-		font: inherit;
 		text-align: right;
-	}
-
-	.allocation-input[aria-invalid='true'] {
-		border-color: #b3261e;
-	}
-
-	.allocation-button {
-		flex: 0 0 auto;
-		padding: 0.5rem 0.9rem;
-		border: 1px solid #1a5fb4;
-		border-radius: 4px;
-		background: #1a5fb4;
-		color: #fff;
-		font: inherit;
-		font-weight: 600;
-		cursor: pointer;
-	}
-
-	.allocation-button:disabled {
-		cursor: default;
-		opacity: 0.6;
 	}
 
 	.invested {
 		font-weight: 600;
-		color: #222;
+		color: var(--color-text);
 	}
 
 	.filter-row {
@@ -766,27 +705,22 @@
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.5rem;
-		margin-bottom: 0.75rem;
 	}
 
 	.filter-label {
 		font-size: 0.9rem;
-		color: #444;
+		color: var(--color-text-muted);
 	}
 
 	.filter-input {
 		flex: 1 1 12rem;
 		min-width: 0;
 		max-width: 20rem;
-		padding: 0.5rem 0.6rem;
-		border: 1px solid #b8b8b8;
-		border-radius: 4px;
-		font: inherit;
 	}
 
 	.count {
 		margin-top: 0.5rem;
-		color: #444;
+		color: var(--color-text-muted);
 		font-size: 0.9rem;
 	}
 </style>

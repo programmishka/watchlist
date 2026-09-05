@@ -11,6 +11,16 @@ export default defineConfig({
 	fullyParallel: true,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
+	/**
+	 * Explicit worker cap (TASK-025 §53-54). TASK-023/024 reported intermittent
+	 * failures under high parallel load against the single shared `npm run dev`
+	 * webServer. Reproduced on an 8-core machine: 8 workers failed a different
+	 * test in 2 of 3 full-suite runs, while 4 workers passed 6 of 6 full-suite
+	 * runs. 4 also happens to be Playwright's own CPU-based default here, so
+	 * this pins that value explicitly rather than leaving it to vary with the
+	 * host's core count (e.g. on CI).
+	 */
+	workers: 4,
 	reporter: [['html', { open: 'never' }]],
 	use: {
 		baseURL: 'http://localhost:5173',

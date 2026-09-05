@@ -95,22 +95,24 @@
 {#if errorMessage}
 	<p id={feedbackId} class="target-price-feedback error" role="alert">{errorMessage}</p>
 {:else if warningMessage}
-	<p id={feedbackId} class="target-price-feedback warning">{warningMessage}</p>
+	<p id={feedbackId} class="target-price-feedback warning" role="status">{warningMessage}</p>
 {/if}
 
 <style>
 	.target-price-input {
 		width: 5.5rem;
 		max-width: 100%;
+		min-height: 2.25rem;
 		padding: 0.35rem 0.5rem;
-		border: 1px solid #b8b8b8;
-		border-radius: 4px;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius);
 		font: inherit;
 		text-align: right;
 	}
 
 	.target-price-input[aria-invalid='true'] {
-		border-color: #b3261e;
+		border-color: var(--color-danger);
+		background: var(--color-danger-bg);
 	}
 
 	.target-price-input:disabled {
@@ -124,13 +126,14 @@
 		text-align: left;
 		font-size: 0.8rem;
 		max-width: 12rem;
+		font-weight: 600;
 	}
 
 	.target-price-feedback.error {
-		color: #b3261e;
+		color: var(--color-danger);
 	}
 
 	.target-price-feedback.warning {
-		color: #8a5a00;
+		color: var(--color-warning);
 	}
 </style>
