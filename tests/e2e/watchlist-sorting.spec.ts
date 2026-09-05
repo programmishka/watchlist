@@ -98,8 +98,12 @@ function columnHeader(page: Page, label: string) {
 	return page.getByRole('columnheader', { name: `Sort by ${label}` });
 }
 
+function symbolColumnLocator(page: Page) {
+	return page.getByRole('table').locator('tbody tr td:first-child');
+}
+
 async function symbolColumn(page: Page): Promise<string[]> {
-	return page.getByRole('table').locator('tbody tr td:first-child').allTextContents();
+	return symbolColumnLocator(page).allTextContents();
 }
 
 test.describe('Watchlist table sorting', () => {
@@ -272,7 +276,7 @@ test.describe('Watchlist table sorting', () => {
 
 		await page.getByRole('tab', { name: 'Dividend' }).click();
 
-		expect(await symbolColumn(page)).toEqual(['GAW.L', 'SAP.DE']);
+		await expect(symbolColumnLocator(page)).toHaveText(['GAW.L', 'SAP.DE']);
 		await expect(columnHeader(page, 'Price')).toHaveAttribute('aria-sort', 'none');
 	});
 
@@ -308,7 +312,7 @@ test.describe('Watchlist table sorting', () => {
 		await page.getByLabel('Watchlist name').fill('New');
 		await page.getByRole('button', { name: 'Add watchlist' }).click();
 
-		expect(await symbolColumn(page)).toEqual(['GAW.L', 'SAP.DE']);
+		await expect(symbolColumnLocator(page)).toHaveText(['GAW.L', 'SAP.DE']);
 		await expect(columnHeader(page, 'Price')).toHaveAttribute('aria-sort', 'none');
 	});
 
@@ -344,7 +348,7 @@ test.describe('Watchlist table sorting', () => {
 		page.once('dialog', (dialog) => void dialog.accept());
 		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
 
-		expect(await symbolColumn(page)).toEqual(['GAW.L', 'SAP.DE']);
+		await expect(symbolColumnLocator(page)).toHaveText(['GAW.L', 'SAP.DE']);
 		await expect(columnHeader(page, 'Price')).toHaveAttribute('aria-sort', 'none');
 	});
 
@@ -390,7 +394,7 @@ test.describe('Watchlist table sorting', () => {
 		await targetPriceInput.blur();
 
 		await expect(columnHeader(page, 'Target Price')).toHaveAttribute('aria-sort', 'ascending');
-		expect(await symbolColumn(page)).toEqual(['SAP.DE', 'AAPL']);
+		await expect(symbolColumnLocator(page)).toHaveText(['SAP.DE', 'AAPL']);
 	});
 
 	test('preserves sort and inserts a newly added stock at its sorted position', async ({
@@ -412,7 +416,7 @@ test.describe('Watchlist table sorting', () => {
 		await page.getByRole('button', { name: 'Add stock' }).click();
 
 		await expect(columnHeader(page, 'Price')).toHaveAttribute('aria-sort', 'ascending');
-		expect(await symbolColumn(page)).toEqual(['SAP.DE', 'MSFT', 'GAW.L']);
+		await expect(symbolColumnLocator(page)).toHaveText(['SAP.DE', 'MSFT', 'GAW.L']);
 	});
 
 	test('preserves sort after removing a stock', async ({ page }) => {
@@ -431,7 +435,7 @@ test.describe('Watchlist table sorting', () => {
 		await page.getByRole('button', { name: 'Remove MSFT' }).click();
 
 		await expect(columnHeader(page, 'Price')).toHaveAttribute('aria-sort', 'ascending');
-		expect(await symbolColumn(page)).toEqual(['SAP.DE', 'GAW.L']);
+		await expect(symbolColumnLocator(page)).toHaveText(['SAP.DE', 'GAW.L']);
 	});
 
 	test('causes no application API request when sorting', async ({ page }) => {
