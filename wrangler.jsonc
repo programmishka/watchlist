@@ -1,6 +1,6 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
-	"name": "watchlist-github",
+	"name": "watchlist",
 	"compatibility_date": "2026-09-03",
 	"compatibility_flags": ["nodejs_als"],
 	"main": ".svelte-kit/cloudflare/_worker.js",
@@ -9,14 +9,11 @@
 		"directory": ".svelte-kit/cloudflare"
 	},
 	"workers_dev": true,
-	"preview_urls": true,
-	// Local-development-only KV namespace binding (no production namespace
-	// created by this task). Provide a real "id" here once a production
-	// namespace has been created via `wrangler kv namespace create`.
+	"preview_urls": false,
 	"kv_namespaces": [
 		{
 			"binding": "WATCHLIST_KV",
-			"id": "local-dev-watchlist-kv"
+			"id": "1be7f0e039e24a128957a523981f3381"
 		}
 	],
 	// Local dev simulation of Cloudflare Access (`wrangler dev` only). Not a
