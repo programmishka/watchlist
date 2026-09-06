@@ -1,6 +1,329 @@
-# watchlist
+# Watchlist
 
-A lightweight multi-user stock watchlist built with SvelteKit and Cloudflare, featuring target prices, market data, dividend analysis, and investment allocation.
+A multi-user investment planning application for managing savings plans and individual investments in an existing stock portfolio using a value-oriented approach.
+
+The project is also an exploration of **agent-assisted software engineering**: product requirements, architecture, implementation tasks, reviews, testing, and production deployment were developed through a structured collaboration between a human Product Owner and AI agents with clearly separated responsibilities.
+
+## What the Application Does
+
+Watchlist is designed for investors who already own or follow a portfolio of individual stocks and want to decide **where new capital should be invested based on the relationship between the current market price and their own valuation**.
+
+The central concept is the **Target Price**.
+
+For every stock, the user can define a Target Price representing the price against which the current market valuation should be assessed. The application retrieves current market data and calculates the stock's distance from that Target Price.
+
+This makes the Watchlist more than a conventional price tracker:
+
+* a stock trading relatively close to or below its Target Price can receive a higher investment weighting;
+* a stock trading far above its Target Price can receive a lower weighting or no allocation;
+* Target Prices remain the user's own investment assumptions rather than values supplied by a market-data provider.
+
+### Savings Plan Allocation
+
+The primary use case is allocating a periodic savings amount across an existing stock portfolio.
+
+The user enters a total amount to invest, for example:
+
+```text
+Total savings: €1,000
+```
+
+The server calculates an investment factor for every stock based on its current distance from the configured Target Price and distributes the available savings amount accordingly.
+
+Conceptually:
+
+```text
+Current market price
+        +
+Target Price
+        |
+        v
+Distance to Target
+        |
+        v
+Investment Factor
+        |
+        v
+Relative allocation of the savings amount
+```
+
+The resulting Watchlist shows how much of the available capital would be assigned to each stock.
+
+The calculation is intentionally explicit and on demand. It is not an automated trading system and does not place orders.
+
+### Individual Investment Decisions
+
+The same information can also be used without the savings-plan allocation.
+
+The Watchlist can simply serve as a value-oriented decision aid for individual investments: current prices, Target Prices, and the resulting distance make it easier to identify which stocks currently trade closest to the investor's own valuation.
+
+### Additional Portfolio Information
+
+The Watchlist enriches the decision view with market information such as:
+
+* current market price;
+* company name and trading currency;
+* dividend yield;
+* market capitalization normalized to billions of USD;
+* Target Price;
+* distance to Target Price;
+* calculated savings allocation.
+
+Watchlists can be filtered by company name and sorted by their financial columns. Multiple Watchlists are supported per user.
+
+## Product Principles
+
+A few principles deliberately shape the application:
+
+**User valuation stays separate from market data.** Target Prices belong to the user and are persisted independently of the current Watchlist membership or data returned by Yahoo Finance.
+
+**Financial calculations are server-side.** Dividend yield normalization, market-cap conversion, Target Price distance, investment factors, and savings allocation are not recalculated in the browser.
+
+**Investment allocation is advisory and transient.** Allocation results are calculated on demand and are never persisted or automatically translated into trades.
+
+**Partial market data should not make the entire Watchlist unusable.** Where possible, unavailable values are represented explicitly rather than fabricated.
+
+**Users are isolated by authenticated identity.** Watchlists and Target Prices are stored separately for each authenticated user.
+
+## Technology
+
+### SvelteKit and TypeScript
+
+The application is built with **SvelteKit and TypeScript**.
+
+SvelteKit provides both the responsive browser application and the server-side REST/API layer in one codebase. This keeps the project small while still maintaining a clear boundary between client presentation, application services, domain calculations, provider adapters, and persistence.
+
+TypeScript is used throughout to make those boundaries explicit and to catch integration mistakes early.
+
+Svelte was deliberately chosen for a lightweight application that does not require a large client framework or global state-management solution. Reactive derived state is particularly useful for client-side filtering, sorting, and presentation while the financial business logic remains on the server.
+
+### Cloudflare Workers
+
+The production application runs on **Cloudflare Workers**.
+
+This was chosen because the application is small, serverless, and naturally request-oriented. It does not require a permanently running application server.
+
+The SvelteKit application is built directly for the Workers runtime and its compatibility with external integrations is tested explicitly rather than assuming Node.js compatibility.
+
+### Cloudflare KV
+
+**Cloudflare KV** stores the small amount of persistent application state:
+
+```text
+User
+├── Watchlists
+└── Target Prices
+```
+
+The application does not need a relational data model, joins, transactions, or a high-write database. Whole-document KV persistence therefore keeps the infrastructure intentionally small.
+
+Target Prices are stored independently from Watchlists. Removing a stock from a Watchlist does not remove its Target Price, so adding the stock again restores the user's existing valuation assumption.
+
+### Cloudflare Access
+
+Authentication is delegated entirely to **Cloudflare Access**.
+
+Production uses an explicit email allowlist and Email One-Time PIN authentication. The application contains no passwords, registration flow, or user-account management.
+
+The Worker verifies Cloudflare's `Cf-Access-Jwt-Assertion` server-side against Cloudflare's JWKS, including issuer and audience validation, and uses the verified JWT subject as the stable user identity.
+
+This keeps authentication outside the product while preserving strict per-user isolation in the application.
+
+### Yahoo Finance
+
+Current stock-market information is obtained through **Yahoo Finance**, isolated behind a `MarketDataProvider` abstraction.
+
+The integration was validated separately against real symbols and the Cloudflare Workers runtime before being introduced into application services.
+
+Provider-specific behavior therefore remains at the infrastructure boundary instead of leaking into the domain model.
+
+### Frankfurter
+
+Currency conversion for market capitalization uses the **Frankfurter** exchange-rate API behind a separate `ExchangeRateProvider`.
+
+The application batches the required currencies and converts market capitalization to billions of USD for comparison while preserving the stock's original trading currency and price.
+
+### Vitest
+
+**Vitest** provides fast deterministic unit and application-service tests.
+
+Domain formulas, provider adapters, persistence adapters, authentication, client orchestration, input parsing, filtering, sorting, and other isolated behavior are tested without requiring live external services.
+
+### Playwright
+
+**Playwright** provides permanent browser-level regression tests.
+
+The E2E suite covers the complete user interface at desktop and mobile sizes, including Watchlist management, stock management, Target Price editing, filtering, sorting, investment allocation, error handling, and responsive behavior.
+
+Normal browser tests intercept the application's API boundary and therefore do not depend on Cloudflare, Yahoo Finance, Frankfurter, or production credentials.
+
+Real provider and Cloudflare-runtime behavior is verified separately through focused integration and production smoke tests.
+
+## Agent-Assisted Development
+
+A second goal of this project was to explore how AI coding agents can be used in a controlled software-engineering process rather than simply asking an agent to "build the application."
+
+The work was organized around distinct responsibilities.
+
+### Product Owner
+
+I acted as the **Product Owner**.
+
+I defined the investment problem, explained the behavior of the previous application, made product decisions, supplied real-world examples, reviewed intermediate results, and decided which assumptions should become actual product rules.
+
+This was particularly important for financial behavior where seemingly small implementation assumptions can change the meaning of the application.
+
+### Architect Agent
+
+An AI agent acted as an **architect and engineering partner**.
+
+Together, we:
+
+* translated the investment workflow into explicit business rules;
+* designed the application architecture;
+* selected technologies and integration boundaries;
+* investigated external APIs and Cloudflare behavior;
+* identified ambiguities before implementation;
+* documented architectural decisions in `ARCHITECTURE.md`;
+* decomposed the implementation into narrowly scoped tasks;
+* reviewed the implementation reports after every task;
+* decided what should be implemented next.
+
+The architect agent did not simply hand the complete application to the implementation agent. Each capability was discussed and specified before implementation.
+
+### Implementation Agent
+
+A separate coding agent implemented the tasks with **Claude Code**.
+
+Each task was provided as a Markdown specification under `docs/tasks/` with:
+
+* goal and context;
+* required behavior;
+* architecture constraints;
+* non-goals;
+* test scenarios;
+* acceptance criteria;
+* verification commands;
+* completion-report requirements.
+
+The implementation agent was deliberately constrained from making unrelated architectural decisions, proceeding automatically to the next task, or committing/pushing changes.
+
+After every implementation task, its completion report was reviewed before the next task was defined.
+
+The development loop was therefore:
+
+```text
+Product observation / requirement
+        |
+        v
+Product Owner + Architect Agent
+        |
+        +-- clarify business behavior
+        +-- make architecture decision
+        +-- define acceptance criteria
+        |
+        v
+Markdown implementation task
+        |
+        v
+Claude Code implementation
+        |
+        +-- code
+        +-- unit tests
+        +-- E2E tests where applicable
+        +-- runtime verification
+        |
+        v
+Completion report
+        |
+        v
+Product Owner + Architect review
+        |
+        +-- accept
+        +-- investigate
+        +-- correct
+        +-- define next task
+```
+
+This separation was intentional: the implementation agent had considerable autonomy **inside an accepted task**, but changes to product behavior and architecture remained explicit decisions.
+
+## From Architecture to Production
+
+The project was developed incrementally rather than as one large generated implementation.
+
+Early tasks established the technical foundation and validated risky integrations before they became dependencies of the product. Later tasks introduced persistence, authentication, application services, REST endpoints, and finally the user interface.
+
+Examples of this process include:
+
+* validating `yahoo-finance2` with real international symbols and inside the Cloudflare `workerd` runtime before adopting it;
+* separating Yahoo Finance behind `MarketDataProvider`;
+* separating exchange rates behind `ExchangeRateProvider`;
+* implementing financial formulas as pure domain functions with explicit edge-case tests;
+* keeping Target Prices independent from Watchlist membership;
+* introducing permanent Playwright tests as soon as substantial browser workflows existed;
+* verifying critical integration paths against real Cloudflare KV and external providers;
+* correcting the production authentication architecture when the first real deployment exposed a Cloudflare Static Assets limitation that local testing could not reproduce.
+
+That last case was particularly valuable: the initial architecture used Cloudflare's `ctx.access` identity context. Production deployment demonstrated that the Static Assets router does not forward that context to the application Worker. The architecture was reviewed rather than patched around, and production authentication was changed to cryptographically validated Cloudflare Access JWTs.
+
+The resulting correction was documented and tested instead of hiding the history of the original decision.
+
+## Development After V1
+
+The first successful production deployment was not treated as the end of the product process.
+
+After V1 was running, I continued using the application as its Product Owner and brought observations, usability issues, and improvement ideas back into the same workflow.
+
+The process became:
+
+```text
+Use production application
+        |
+        v
+Product Owner observation
+        |
+        v
+Discuss expected behavior with Architect Agent
+        |
+        v
+Refine architecture / UX decision
+        |
+        v
+Create focused implementation task
+        |
+        v
+Claude Code implementation
+        |
+        v
+Review and regression verification
+```
+
+This allowed the application to evolve from actual usage rather than from an upfront feature list alone.
+
+The repository therefore documents not only the resulting software, but also the **engineering process used to build and evolve it with AI agents under explicit human product and architectural control**.
+
+## Repository Structure
+
+Key documentation:
+
+```text
+ARCHITECTURE.md
+    Architectural decisions, boundaries, business rules, and integration strategy
+
+CLAUDE.md
+    Repository instructions and constraints for the implementation agent
+
+docs/tasks/
+    Incremental implementation tasks and their acceptance criteria
+
+docs/spikes/
+    Focused technical investigations performed before architectural adoption
+
+tests/e2e/
+    Permanent Playwright browser regression tests
+```
+
+Together with the source code and test suite, these files provide a record of how requirements were translated into architecture and then into reviewed implementation increments.
 
 ## Prerequisites
 
