@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_TARGET_PRICE } from '../../shared/targetPrice';
 import type { TargetPriceRepository, TargetPrices } from '../persistence/TargetPriceRepository';
 import { TargetPriceService } from './TargetPriceService';
 import { InvalidSymbolError, InvalidTargetPriceError } from './TargetPriceServiceErrors';
@@ -101,12 +102,30 @@ describe('TargetPriceService.getTargetPrice', () => {
 		expect(repository.getCalls).toBe(0);
 	});
 
-	it('does not treat differently-cased symbols as equivalent', async () => {
+	it('treats differently-cased symbols as the same identity (TASK-038, supersedes prior trim-only behavior)', async () => {
 		const repository = new FakeTargetPriceRepository();
 		repository.seed('user-1', { AAPL: 200 });
 		const service = new TargetPriceService(repository);
 
-		expect(await service.getTargetPrice('user-1', 'aapl')).toBeUndefined();
+		expect(await service.getTargetPrice('user-1', 'aapl')).toBe(200);
+	});
+
+	it('rejects a syntactically invalid symbol before repository access (TASK-038)', async () => {
+		const repository = new FakeTargetPriceRepository();
+		const service = new TargetPriceService(repository);
+
+		await expect(service.getTargetPrice('user-1', 'AAPL!')).rejects.toThrow(InvalidSymbolError);
+		expect(repository.getCalls).toBe(0);
+	});
+
+	it('rejects an over-length symbol before repository access (TASK-038)', async () => {
+		const repository = new FakeTargetPriceRepository();
+		const service = new TargetPriceService(repository);
+
+		await expect(service.getTargetPrice('user-1', 'A'.repeat(21))).rejects.toThrow(
+			InvalidSymbolError
+		);
+		expect(repository.getCalls).toBe(0);
 	});
 });
 
@@ -212,6 +231,66 @@ describe('TargetPriceService.setTargetPrice', () => {
 		const result = await service.setTargetPrice('user-1', 'HEXA-B.ST', 99);
 
 		expect(result).toEqual({ 'HEXA-B.ST': 99 });
+	});
+
+	it('uppercases a lowercase symbol before persisting, unifying it with the canonical stock-add identity (TASK-038)', async () => {
+		const repository = new FakeTargetPriceRepository();
+		const service = new TargetPriceService(repository);
+
+		const result = await service.setTargetPrice('user-1', 'aapl', 200);
+
+		expect(result).toEqual({ AAPL: 200 });
+	});
+
+	it('rejects a syntactically invalid symbol before repository access (TASK-038)', async () => {
+		const repository = new FakeTargetPriceRepository();
+		const service = new TargetPriceService(repository);
+
+		await expect(service.setTargetPrice('user-1', 'AAPL!', 200)).rejects.toThrow(
+			InvalidSymbolError
+		);
+		expect(repository.getCalls).toBe(0);
+		expect(repository.saveCalls).toHaveLength(0);
+	});
+
+	it('rejects an over-length symbol before repository access (TASK-038)', async () => {
+		const repository = new FakeTargetPriceRepository();
+		const service = new TargetPriceService(repository);
+
+		await expect(service.setTargetPrice('user-1', 'A'.repeat(21), 200)).rejects.toThrow(
+			InvalidSymbolError
+		);
+		expect(repository.getCalls).toBe(0);
+		expect(repository.saveCalls).toHaveLength(0);
+	});
+
+	it('accepts the maximum valid target price', async () => {
+		const repository = new FakeTargetPriceRepository();
+		const service = new TargetPriceService(repository);
+
+		const result = await service.setTargetPrice('user-1', 'AAPL', MAX_TARGET_PRICE);
+
+		expect(result).toEqual({ AAPL: MAX_TARGET_PRICE });
+	});
+
+	it('rejects a target price above the maximum before repository access', async () => {
+		const repository = new FakeTargetPriceRepository();
+		const service = new TargetPriceService(repository);
+
+		await expect(
+			service.setTargetPrice('user-1', 'AAPL', MAX_TARGET_PRICE + 0.0001)
+		).rejects.toThrow(InvalidTargetPriceError);
+		expect(repository.getCalls).toBe(0);
+		expect(repository.saveCalls).toHaveLength(0);
+	});
+
+	it('accepts a multi-decimal value below the maximum, proving no two-decimal restriction was introduced', async () => {
+		const repository = new FakeTargetPriceRepository();
+		const service = new TargetPriceService(repository);
+
+		const result = await service.setTargetPrice('user-1', 'AAPL', 123.456789);
+
+		expect(result).toEqual({ AAPL: 123.456789 });
 	});
 
 	it('propagates a repository save failure rather than reporting success', async () => {

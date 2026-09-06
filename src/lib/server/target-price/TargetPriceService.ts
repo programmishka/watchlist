@@ -1,20 +1,26 @@
+import { parseStockSymbol } from '../../shared/stockSymbol';
+import { MAX_TARGET_PRICE } from '../../shared/targetPrice';
 import type { TargetPriceRepository, TargetPrices } from '../persistence/TargetPriceRepository';
 import { InvalidSymbolError, InvalidTargetPriceError } from './TargetPriceServiceErrors';
 
-function normalizeSymbol(symbol: string): string {
-	return symbol.trim();
-}
-
+/**
+ * TASK-038: applies the same canonical trim -> uppercase -> length -> grammar
+ * rule as stock addition (`$lib/shared/stockSymbol.ts`), closing the
+ * inconsistency where this route previously only trimmed its path symbol —
+ * see `docs/security/input-boundary-audit.md` §4. `parseStockSymbol` is a
+ * pure shared module, not a `watchlist` import, so this preserves TASK-010's
+ * rule that `TargetPriceService` must not depend on the `watchlist` module.
+ */
 function assertValidSymbol(symbol: string): string {
-	const normalized = normalizeSymbol(symbol);
-	if (normalized.length === 0) {
+	const parsed = parseStockSymbol(symbol);
+	if (!parsed.valid) {
 		throw new InvalidSymbolError(symbol);
 	}
-	return normalized;
+	return parsed.symbol;
 }
 
 function assertValidTargetPrice(targetPrice: number): void {
-	if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
+	if (!Number.isFinite(targetPrice) || targetPrice <= 0 || targetPrice > MAX_TARGET_PRICE) {
 		throw new InvalidTargetPriceError(targetPrice);
 	}
 }

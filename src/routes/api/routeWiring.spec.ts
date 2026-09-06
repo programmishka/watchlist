@@ -179,6 +179,90 @@ describe('POST /api/watchlists/[id]/investment-allocation early validation (real
 	});
 });
 
+describe('Watchlist ID boundary (TASK-038, real +server.ts handlers)', () => {
+	const authenticatedLocals = { user: { id: 'user-1' } };
+	const OVER_LIMIT_ID = 'a'.repeat(65);
+
+	it.each([
+		[
+			'GET /api/watchlists/[id]',
+			() =>
+				watchlistGet(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						params: { watchlistId: OVER_LIMIT_ID },
+						platform: undefined
+					})
+				)
+		],
+		[
+			'POST /api/watchlists/[id]/stocks',
+			() =>
+				stocksPost(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						params: { watchlistId: OVER_LIMIT_ID },
+						request: jsonRequest({ symbol: 'AAPL' }),
+						platform: undefined
+					})
+				)
+		],
+		[
+			'DELETE /api/watchlists/[id]/stocks/[symbol]',
+			() =>
+				stockDelete(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						params: { watchlistId: OVER_LIMIT_ID, symbol: 'AAPL' },
+						platform: undefined
+					})
+				)
+		],
+		[
+			'POST /api/watchlists/[id]/investment-allocation',
+			() =>
+				investmentAllocationPost(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						params: { watchlistId: OVER_LIMIT_ID },
+						request: jsonRequest({ totalSavings: 1000 }),
+						platform: undefined
+					})
+				)
+		],
+		[
+			'PUT /api/watchlists/active',
+			() =>
+				activePut(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						request: jsonRequest({ watchlistId: OVER_LIMIT_ID }),
+						platform: undefined
+					})
+				)
+		]
+	])(
+		'%s returns 400 INVALID_REQUEST for a 65-character watchlistId without constructing application services',
+		async (_label, callRoute) => {
+			// platform is deliberately undefined: if validation happened after
+			// createApplicationServices, this would fail with 500 INTERNAL_ERROR
+			// (PlatformUnavailableError) instead of the expected 400.
+			await expectApiError(await callRoute(), 400, 'INVALID_REQUEST');
+		}
+	);
+
+	it('does not reject a well-formed 64-character watchlistId solely for length (falls through to WATCHLIST_NOT_FOUND)', async () => {
+		const kv = new FakeKv();
+		const event = unauthenticatedEvent({
+			locals: authenticatedLocals,
+			params: { watchlistId: 'a'.repeat(64) },
+			platform: { env: { WATCHLIST_KV: kv } }
+		});
+
+		await expectApiError(await watchlistGet(event), 404, 'WATCHLIST_NOT_FOUND');
+	});
+});
+
 describe('API route ownership (real +server.ts handlers, fake KV, no network)', () => {
 	it('creates the watchlist under the authenticated user id, ignoring any client-supplied userId', async () => {
 		const kv = new FakeKv();

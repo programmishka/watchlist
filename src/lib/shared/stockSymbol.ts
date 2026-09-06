@@ -10,14 +10,21 @@
  */
 const STOCK_SYMBOL_PATTERN = /^[A-Z0-9]+(?:[.-][A-Z0-9]+)*$/;
 
+/**
+ * Maximum symbol length after normalization (TASK-038). Protects
+ * `MarketDataProvider.resolveSymbol()`/`getQuote()` from unbounded input —
+ * see `docs/security/input-boundary-audit.md` §4.
+ */
+export const MAX_STOCK_SYMBOL_LENGTH = 20;
+
 /** Trims surrounding whitespace and uppercases. Order is mandatory: trim, then uppercase. */
 export function normalizeStockSymbol(input: string): string {
 	return input.trim().toUpperCase();
 }
 
-/** Expects an already-normalized symbol; validates the input grammar only. */
+/** Expects an already-normalized symbol; validates length and grammar. */
 export function isValidStockSymbol(symbol: string): boolean {
-	return STOCK_SYMBOL_PATTERN.test(symbol);
+	return symbol.length <= MAX_STOCK_SYMBOL_LENGTH && STOCK_SYMBOL_PATTERN.test(symbol);
 }
 
 export interface StockSymbolParseResult {

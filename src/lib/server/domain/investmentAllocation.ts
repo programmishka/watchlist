@@ -1,3 +1,5 @@
+import { MAX_TOTAL_SAVINGS } from '../../shared/investmentSavings';
+
 /**
  * Current market price for a symbol, as supplied by an external market-data
  * provider. Not persisted; distinct from the application-owned TargetPrice.
@@ -78,9 +80,15 @@ export function calculateFactorSum(factors: number[]): number {
  * `totalSavings` before doing unnecessary work — the exact same rule
  * `calculateSavingsAllocation` applies internally, not a second/conflicting
  * one.
+ *
+ * TASK-038: uses `Number.isSafeInteger` rather than `Number.isInteger` — the
+ * latter accepts values above `Number.MAX_SAFE_INTEGER` that have already
+ * silently rounded to a neighboring representable integer (e.g.
+ * `Number.MAX_SAFE_INTEGER + 2`), which is not the value the caller actually
+ * sent. Also enforces the application's upper bound, `MAX_TOTAL_SAVINGS`.
  */
 export function assertValidTotalSavings(totalSavings: number): void {
-	if (!Number.isFinite(totalSavings) || !Number.isInteger(totalSavings) || totalSavings < 0) {
+	if (!Number.isSafeInteger(totalSavings) || totalSavings < 0 || totalSavings > MAX_TOTAL_SAVINGS) {
 		throw new InvalidTotalSavingsError(totalSavings);
 	}
 }

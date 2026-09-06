@@ -330,6 +330,29 @@ test.describe('Watchlist filtering', () => {
 		expect(overflows).toBe(false);
 	});
 
+	test('the filter input has maxlength=100 and remains local-only at the limit (TASK-038)', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, FOUR_STOCKS);
+
+		const apiRequests: string[] = [];
+		page.on('request', (request) => {
+			if (request.url().includes('/api/')) {
+				apiRequests.push(request.url());
+			}
+		});
+
+		await page.goto('/');
+		const input = filterInput(page);
+		await expect(input).toHaveAttribute('maxlength', '100');
+		apiRequests.length = 0;
+
+		await input.fill('x'.repeat(120));
+		await expect(input).toHaveValue('x'.repeat(100));
+
+		expect(apiRequests).toHaveLength(0);
+	});
+
 	test('typing in the filter causes no application API requests', async ({ page }) => {
 		await mockSingleWatchlist(page, FOUR_STOCKS);
 

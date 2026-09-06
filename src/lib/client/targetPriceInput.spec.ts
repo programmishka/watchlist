@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_TARGET_PRICE } from '../shared/targetPrice';
 import { parseTargetPriceInput } from './targetPriceInput';
 
 describe('parseTargetPriceInput', () => {
@@ -26,5 +27,13 @@ describe('parseTargetPriceInput', () => {
 		['-10.5']
 	])('rejects %s', (input) => {
 		expect(parseTargetPriceInput(input)).toBeUndefined();
+	});
+
+	it('accepts the maximum value (TASK-038)', () => {
+		expect(parseTargetPriceInput(String(MAX_TARGET_PRICE))).toBe(MAX_TARGET_PRICE);
+	});
+
+	it('rejects a value above the maximum (TASK-038)', () => {
+		expect(parseTargetPriceInput(String(MAX_TARGET_PRICE + 1))).toBeUndefined();
 	});
 });

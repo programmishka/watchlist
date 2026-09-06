@@ -13,7 +13,8 @@ import {
 	NoActiveWatchlistError,
 	SymbolNotFoundError,
 	UnknownStockSymbolError,
-	WatchlistNotFoundError
+	WatchlistNotFoundError,
+	WatchlistStockLimitReachedError
 } from '../watchlist/WatchlistServiceErrors';
 import type { ApiErrorResponse } from './ApiError';
 import { InvalidRequestError, UnauthenticatedError } from './errors';
@@ -36,6 +37,7 @@ describe('mapErrorToResponse', () => {
 		[new WatchlistNotFoundError('wl-1'), 404, 'WATCHLIST_NOT_FOUND'],
 		[new SymbolNotFoundError('AAPL', 'wl-1'), 404, 'SYMBOL_NOT_FOUND'],
 		[new DuplicateSymbolError('AAPL', 'wl-1'), 409, 'DUPLICATE_SYMBOL'],
+		[new WatchlistStockLimitReachedError('wl-1'), 409, 'WATCHLIST_STOCK_LIMIT_REACHED'],
 		[new NoActiveWatchlistError(), 409, 'NO_ACTIVE_WATCHLIST'],
 		[new UnknownStockSymbolError('DOES-NOT-EXIST'), 422, 'UNKNOWN_STOCK_SYMBOL'],
 		[new MarketDataProviderError('outage'), 503, 'MARKET_DATA_UNAVAILABLE'],
@@ -46,6 +48,14 @@ describe('mapErrorToResponse', () => {
 		const { status, code } = await statusAndCode(mapErrorToResponse(error));
 		expect(status).toBe(expectedStatus);
 		expect(code).toBe(expectedCode);
+	});
+
+	it('gives a clear user-facing message for the stock-limit error, naming the capacity', async () => {
+		const response = mapErrorToResponse(new WatchlistStockLimitReachedError('wl-1'));
+		const body = (await response.json()) as ApiErrorResponse;
+
+		expect(body.error.message).toContain('1,000');
+		expect(body.error.message.toLowerCase()).toContain('stocks');
 	});
 
 	it('never leaks the original error message for unexpected errors', async () => {

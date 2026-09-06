@@ -322,9 +322,10 @@ symbols[]
 Properties:
 
 * `id` uniquely identifies the watchlist;
-* `name` is user-defined;
+* `name` is user-defined, 1–50 UTF-16 code units after trimming (TASK-038);
 * duplicate watchlist names are allowed;
-* `symbols` contains stock symbols;
+* `symbols` contains stock symbols, at most `MAX_STOCKS_PER_WATCHLIST = 1,000`
+  per Watchlist (TASK-038) — see §12.1.3;
 * a symbol may occur at most once in a particular watchlist;
 * the same symbol may occur in multiple watchlists.
 
@@ -482,6 +483,7 @@ The user enters a name and confirms creation using the corresponding UI action.
 Rules:
 
 * the name is required;
+* the trimmed name must not exceed 50 UTF-16 code units (TASK-038, §9.2, §29.2);
 * duplicate names are allowed;
 * every watchlist receives a unique ID;
 * the newly created watchlist becomes the active watchlist, even when other watchlists already exist.
@@ -536,11 +538,17 @@ before ever contacting the market-data provider. `.` and `-` are accepted
 only as separators between non-empty alphanumeric components (numeric
 components are supported, e.g. `0700.HK`, `7203.T`); empty input,
 whitespace-only input, and repeated/mixed/leading/trailing separators
-(`SAP..DE`, `SAP--DE`, `.SAP`, `SAP.`) are rejected. No arbitrary maximum
-length is imposed. This rule is implemented once, as a small pure/dependency-
-free module usable from both server and browser code (`$lib/shared/`, never
-`$lib/server/`, so the browser can apply the same UX-optimization check —
-see §26.3), and is authoritative only on the server.
+(`SAP..DE`, `SAP--DE`, `.SAP`, `SAP.`) are rejected. A normalized symbol must
+also be at most 20 characters (`MAX_STOCK_SYMBOL_LENGTH`, TASK-038) —
+enforced before the provider call so an arbitrarily long syntactically-valid
+string can never reach `resolveSymbol()`/`getQuote()`. This rule is
+implemented once, as a small pure/dependency-free module usable from both
+server and browser code (`$lib/shared/`, never `$lib/server/`, so the browser
+can apply the same UX-optimization check — see §26.3), and is authoritative
+only on the server. Every external Stock Symbol boundary in the application —
+stock addition and the Target Price `symbol` path parameter (§20) — applies
+this exact same normalization/length/grammar rule; there is no separate,
+weaker path-symbol parser.
 
 A syntactically invalid symbol is rejected immediately as `InvalidSymbolError`
 (`INVALID_STOCK_SYMBOL` at the HTTP boundary, §24.3) — the market-data
@@ -665,6 +673,25 @@ authenticated user + symbol
 ```
 
 that target price is automatically used.
+
+#### 12.1.3 Watchlist Stock Capacity (TASK-038)
+
+> A Watchlist may contain at most 1,000 stocks (`MAX_STOCKS_PER_WATCHLIST`).
+
+This bounds provider/application work per addition, keeps per-user
+persistence growth predictable (§10.1), and bounds the composition/
+allocation/rendering workload for a single Watchlist (§9.5, §22). The rule is
+enforced as an admission check before `MarketDataProvider.resolveSymbol()` is
+called: a full Watchlist rejects an additional stock (`WatchlistStockLimitReachedError`
+/ `409 WATCHLIST_STOCK_LIMIT_REACHED`) without any outbound provider request
+and without persisting a partial mutation. A Watchlist already at exactly 999
+stocks may still accept one more, reaching exactly 1,000. A Watchlist that
+somehow already exceeds 1,000 stocks (a defensive/historical state) remains
+fully readable and its stocks remain removable — it is never automatically
+truncated or migrated — but no further stock may be added to it until it
+drops back under the limit. No existing persisted data exceeded this limit at
+the time TASK-038 was implemented, so no migration was required or
+introduced.
 
 ### 12.2 Duplicate Symbols
 
@@ -1321,6 +1348,17 @@ The REST API communicates numeric values as JSON numbers using standard JSON num
 
 The server MUST validate target-price input.
 
+**Bound (TASK-038):** a target price must be finite, strictly greater than 0,
+and at most `1,000,000` (a generous per-share ceiling for this application's
+supported equities, §12.1.1). There is deliberately no decimal-place/precision
+restriction — a value such as `123.456789` remains valid provided it satisfies
+the finite/positive/maximum rule; the existing two-decimal display formatting
+(§26.10) is presentation only and does not constrain the persisted value. The
+Target Price `symbol` path parameter (`PUT /api/target-prices/{symbol}`) uses
+the same normalization/length/grammar rule as every other Stock Symbol
+boundary (§12.1), so case differences (`AAPL`/`aapl`) cannot produce separate
+Target Price identities.
+
 ---
 
 ## 21. Distance to Target
@@ -1392,12 +1430,17 @@ allocation from completing normally.
 
 ### 22.1 Total Savings Validation
 
-`totalSavings` must be a finite, non-negative integer.
+`totalSavings` must be a safe integer (`Number.isSafeInteger`, TASK-038 —
+supersedes an earlier `Number.isInteger` check that silently accepted values
+above `Number.MAX_SAFE_INTEGER` after floating-point rounding), non-negative,
+and at most `10,000,000`.
 
 - `0` is valid and results in zero allocation for all stocks.
+- `10,000,000` is the largest valid value;
 - negative values are invalid;
 - fractional values are invalid;
-- `NaN` and infinite values are invalid.
+- `NaN` and infinite values are invalid;
+- unsafe integers are invalid.
 
 Invalid total-savings input must be rejected rather than coerced.
 
@@ -1562,7 +1605,7 @@ Errors use a stable JSON shape independent of internal exception class names:
 { "error": { "code": "DUPLICATE_SYMBOL", "message": "The symbol already exists in this watchlist." } }
 ```
 
-Supported codes: `UNAUTHENTICATED`, `INVALID_REQUEST`, `WATCHLIST_NOT_FOUND`, `NO_ACTIVE_WATCHLIST`, `INVALID_WATCHLIST_NAME`, `INVALID_SYMBOL`, `INVALID_STOCK_SYMBOL`, `UNKNOWN_STOCK_SYMBOL`, `DUPLICATE_SYMBOL`, `SYMBOL_NOT_FOUND`, `INVALID_TARGET_PRICE`, `INVALID_TOTAL_SAVINGS`, `MARKET_DATA_UNAVAILABLE`, `PERSISTENCE_ERROR`, `INTERNAL_ERROR`. Business/domain/provider exception classes remain independent of HTTP; one small server-side mapping helper centralizes the translation to status + code + message, so routes never expose raw Yahoo/Frankfurter/Cloudflare errors or reproduce this mapping themselves.
+Supported codes: `UNAUTHENTICATED`, `INVALID_REQUEST`, `WATCHLIST_NOT_FOUND`, `NO_ACTIVE_WATCHLIST`, `INVALID_WATCHLIST_NAME`, `INVALID_SYMBOL`, `INVALID_STOCK_SYMBOL`, `UNKNOWN_STOCK_SYMBOL`, `DUPLICATE_SYMBOL`, `SYMBOL_NOT_FOUND`, `INVALID_TARGET_PRICE`, `INVALID_TOTAL_SAVINGS`, `WATCHLIST_STOCK_LIMIT_REACHED`, `MARKET_DATA_UNAVAILABLE`, `PERSISTENCE_ERROR`, `INTERNAL_ERROR`. `WATCHLIST_STOCK_LIMIT_REACHED` (409, TASK-038) is returned when a Watchlist already at its `MAX_STOCKS_PER_WATCHLIST` capacity (§12.1.3) is sent an additional stock. Business/domain/provider exception classes remain independent of HTTP; one small server-side mapping helper centralizes the translation to status + code + message, so routes never expose raw Yahoo/Frankfurter/Cloudflare errors or reproduce this mapping themselves.
 
 `INVALID_STOCK_SYMBOL` (TASK-029) is specifically the stock-add syntax-validation failure (§12.1) and is distinct from `UNKNOWN_STOCK_SYMBOL` (syntactically valid, provider does not recognize it) and `MARKET_DATA_UNAVAILABLE` (provider itself failed). `INVALID_SYMBOL` remains a separate, narrower code used only by the Target Price `symbol` path parameter (empty/whitespace-only check, §20) — it does not apply the stock-symbol grammar and was intentionally left unchanged by TASK-029.
 
@@ -2142,9 +2185,40 @@ numeric value (request bodies, URL path parameters) must eventually have
 an explicit, justified bound enforced at the server boundary, independent
 of whatever the browser does or does not restrict. TASK-037 audited every
 current input against this rule; see `docs/security/input-boundary-audit.md`
-for the full inventory and gap analysis. The concrete numeric/length
-bounds identified as currently missing are recommendations pending
-TASK-038 implementation, not yet part of this architecture.
+for the full inventory and gap analysis. TASK-038 (below) implements the
+concrete bounds that audit identified as missing.
+
+### 29.2 Final Input Bounds (TASK-038)
+
+The following bounds are authoritative at the server boundary; the browser
+mirrors each as an HTML `maxlength` purely for UX (§29.1) and independently
+pre-validates locally where practical, but never as a substitute for the
+server check.
+
+| Input | Final rule |
+| --- | --- |
+| Watchlist name | 1–50 UTF-16 code units after trimming |
+| Stock symbol (all entry points) | ≤ 20 characters after normalization, existing grammar |
+| Target Price | finite, `> 0`, `<= 1,000,000`; no decimal-place limit |
+| Total Savings | safe integer, `0..10,000,000` |
+| Watchlist ID (path/body) | ≤ 64 characters, no format constraint |
+| Company-name filter | ≤ 100 characters, client-only, not a security control |
+| Stocks per Watchlist | ≤ 1,000 (§12.1.3) |
+
+**Watchlist ID.** Every route accepting a `watchlistId` (path parameter or,
+for `PUT /api/watchlists/active`, request-body field) rejects one exceeding
+64 characters as `400 INVALID_REQUEST` before any repository/provider work —
+generous headroom over the 36-character UUIDs the ID generator produces
+(§7), with no stricter format imposed since the generator remains an
+injectable seam. This is distinct from `404 WATCHLIST_NOT_FOUND`: a
+structurally acceptable ID that simply does not belong to the authenticated
+user's Watchlists still resolves to `404`, preserving that code's existing
+meaning.
+
+No request-body-size/transport-level hardening is included here — TASK-037
+identified that `request.json()` runs before any field-level check and that
+Cloudflare's platform body-size limits are much larger than legitimate
+application requests; that remains open as a separate follow-up (TASK-039).
 
 ---
 

@@ -1,4 +1,5 @@
 import { parseStockSymbol } from '../shared/stockSymbol';
+import { isValidWatchlistName } from '../shared/watchlistName';
 import {
 	addStock,
 	calculateInvestmentAllocation,
@@ -162,7 +163,9 @@ export interface CreateWatchlistHandlers {
  * Implements TASK-019 §2-4/§15: sends the trimmed name, treats the response
  * as the sole source of truth for which Watchlist became active (never
  * inventing the active id itself), then loads that composed Watchlist. A
- * blank/whitespace-only name is refused before any request is sent.
+ * blank/whitespace-only name, or one exceeding `MAX_WATCHLIST_NAME_LENGTH`
+ * (TASK-038), is refused before any request is sent — mirroring the input's
+ * `maxlength`, not a substitute for the server's authoritative check.
  */
 export async function createWatchlistAndActivate(
 	api: WatchlistShellApi,
@@ -170,7 +173,7 @@ export async function createWatchlistAndActivate(
 	handlers: CreateWatchlistHandlers
 ): Promise<void> {
 	const trimmedName = name.trim();
-	if (!trimmedName) {
+	if (!isValidWatchlistName(trimmedName)) {
 		return;
 	}
 

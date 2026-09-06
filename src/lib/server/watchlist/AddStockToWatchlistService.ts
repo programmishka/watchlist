@@ -23,6 +23,17 @@ import type { WatchlistService } from './WatchlistService';
  * returning `undefined` covers both "unknown symbol" and "known but
  * unsupported instrument" — the service does not and must not distinguish
  * them, both surface as `UnknownStockSymbolError`.
+ *
+ * TASK-038 admission ordering: `WatchlistService.prepareAddSymbol()` now runs
+ * *before* the provider call, so a missing Watchlist, a full Watchlist
+ * (`WatchlistStockLimitReachedError`), or an already-present duplicate are
+ * all rejected without ever calling `resolveSymbol()` — closing the gap
+ * where a doomed addition still paid for an outbound Yahoo request. This
+ * intentionally supersedes the previous provider-before-missing-Watchlist and
+ * provider-before-duplicate ordering (see `WatchlistService.spec.ts`/
+ * `AddStockToWatchlistService.spec.ts` for the updated ordering assertions).
+ * `commitAddSymbol()` reuses the document `prepareAddSymbol()` already loaded,
+ * so this still performs exactly one repository read and one write.
  */
 export class AddStockToWatchlistService {
 	constructor(
@@ -36,11 +47,17 @@ export class AddStockToWatchlistService {
 			throw new InvalidSymbolError(symbol);
 		}
 
+		const prepared = await this.watchlistService.prepareAddSymbol(
+			userId,
+			watchlistId,
+			parsed.symbol
+		);
+
 		const resolved = await this.marketDataProvider.resolveSymbol(parsed.symbol);
 		if (!resolved) {
 			throw new UnknownStockSymbolError(parsed.symbol);
 		}
 
-		return this.watchlistService.addSymbol(userId, watchlistId, parsed.symbol);
+		return this.watchlistService.commitAddSymbol(userId, prepared, parsed.symbol);
 	}
 }

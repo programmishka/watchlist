@@ -639,6 +639,28 @@ test.describe('Investment allocation', () => {
 		expect(allocationCalls.calls).toHaveLength(1);
 	});
 
+	test('the total savings input has maxlength=8 and accepts the maximum value (TASK-038)', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, [AAPL_STOCK]);
+		const allocationCalls = await mockCalculateInvestmentAllocation(page, WATCHLIST_ID, () => ({
+			totalSavings: 10_000_000,
+			invested: 10_000_000,
+			allocations: [{ symbol: 'AAPL', factor: 1, savingsAmount: 10_000_000 }]
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Total savings');
+		await expect(input).toHaveAttribute('maxlength', '8');
+
+		await input.fill('10000000');
+		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
+
+		expect(allocationCalls.calls).toEqual([
+			{ totalSavings: 10_000_000, rawBody: { totalSavings: 10_000_000 } }
+		]);
+	});
+
 	test('mobile layout keeps the allocation controls usable and the Savings Amount column reachable', async ({
 		page
 	}, testInfo) => {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { filterStocksByCompanyName, formatStockCount } from './watchlistFilter';
+import {
+	MAX_COMPANY_NAME_FILTER_LENGTH,
+	filterStocksByCompanyName,
+	formatStockCount
+} from './watchlistFilter';
 import type { WatchlistStock } from './watchlistApi';
 
 function stock(symbol: string, name: string | undefined): WatchlistStock {
@@ -49,6 +53,19 @@ describe('filterStocksByCompanyName', () => {
 
 	it('does not match a symbol when only the company name should be searched', () => {
 		expect(filterStocksByCompanyName([UNKNOWN], 'UNKNOWN')).toEqual([]);
+	});
+
+	it('behaves predictably for a filter over the maximum length, truncating rather than erroring (TASK-038)', () => {
+		const overLimitFilter = 'x'.repeat(MAX_COMPANY_NAME_FILTER_LENGTH + 50) + 'shop';
+		expect(() => filterStocksByCompanyName([GAMES_WORKSHOP], overLimitFilter)).not.toThrow();
+		expect(filterStocksByCompanyName([GAMES_WORKSHOP], overLimitFilter)).toEqual([]);
+	});
+
+	it('matches using only the first MAX_COMPANY_NAME_FILTER_LENGTH characters of an over-limit filter', () => {
+		const nameWithinLimit = 'shop' + 'x'.repeat(MAX_COMPANY_NAME_FILTER_LENGTH - 4);
+		const stock = { symbol: 'X', name: nameWithinLimit, dividendYield: 0 };
+		const overLimitFilter = nameWithinLimit + 'extra-characters-beyond-the-limit';
+		expect(filterStocksByCompanyName([stock], overLimitFilter)).toEqual([stock]);
 	});
 });
 

@@ -1,11 +1,37 @@
 # Input Boundary Security Audit
 
-Status: Complete (TASK-037)
+Status: Complete (TASK-037); field/resource-bound findings closed by TASK-038
 
 This document is the output of TASK-037. It is an **audit and design
 document only**. No validation behavior was changed while producing it. It
 defines the scope for TASK-038 (final field-level bounds) and identifies
 whether a separate TASK-039 (request-body-size hardening) is warranted.
+
+## TASK-038 Implementation Status
+
+TASK-038 implemented every field-level bound and the Watchlist stock-capacity
+limit this audit recommended (§14/§15/§18), largely as recommended:
+
+* Watchlist name (≤ 50, UTF-16 code units after trim), Stock Symbol (≤ 20,
+  applied identically to stock addition *and* the Target Price `symbol` path
+  parameter — closing the §4 casing/grammar inconsistency), Target Price
+  (`0 < value <= 1,000,000`, no decimal-place restriction), Total Savings
+  (`0 <= value <= 10,000,000`, `Number.isSafeInteger`), Watchlist ID (≤ 64
+  characters, `400 INVALID_REQUEST` distinct from `404 WATCHLIST_NOT_FOUND`
+  as this audit recommended in §7/§17), and the company-name filter (≤ 100,
+  client-only) are all enforced exactly as recommended in §15.
+* A new resource bound not covered by TASK-037 was introduced by TASK-038's
+  own task specification: a Watchlist may contain at most 1,000 stocks
+  (`MAX_STOCKS_PER_WATCHLIST`), enforced before `MarketDataProvider.resolveSymbol()`.
+* Error-code reuse followed §11 exactly: no new API codes were introduced for
+  the field-level bounds themselves. One genuinely new code,
+  `WATCHLIST_STOCK_LIMIT_REACHED` (409), was introduced for the new capacity
+  rule, which this audit did not anticipate.
+* Request-body-size/transport-level hardening remains explicitly **open**,
+  exactly as recommended in §10/§18 — see **TASK-039** below.
+
+This section records implementation status only; the findings above (§1-§18)
+are preserved unmodified as the original audit record.
 
 Method: every route handler, request parser, domain/service validation
 function, persistence repository, and client input component under

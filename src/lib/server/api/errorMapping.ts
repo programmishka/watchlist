@@ -6,6 +6,7 @@ import {
 	InvalidSymbolError as InvalidTargetPriceSymbolError,
 	InvalidTargetPriceError
 } from '../target-price/TargetPriceServiceErrors';
+import { MAX_STOCKS_PER_WATCHLIST } from '../watchlist/WatchlistService';
 import {
 	DuplicateSymbolError,
 	InvalidSymbolError as InvalidWatchlistSymbolError,
@@ -13,7 +14,8 @@ import {
 	NoActiveWatchlistError,
 	SymbolNotFoundError,
 	UnknownStockSymbolError,
-	WatchlistNotFoundError
+	WatchlistNotFoundError,
+	WatchlistStockLimitReachedError
 } from '../watchlist/WatchlistServiceErrors';
 import type { ApiErrorCode, ApiErrorResponse } from './ApiError';
 import { InvalidRequestError, UnauthenticatedError } from './errors';
@@ -66,6 +68,13 @@ export function mapErrorToResponse(error: unknown): Response {
 	}
 	if (error instanceof DuplicateSymbolError) {
 		return errorResponse(409, 'DUPLICATE_SYMBOL', 'The symbol already exists in this watchlist.');
+	}
+	if (error instanceof WatchlistStockLimitReachedError) {
+		return errorResponse(
+			409,
+			'WATCHLIST_STOCK_LIMIT_REACHED',
+			`This watchlist can contain up to ${MAX_STOCKS_PER_WATCHLIST.toLocaleString('en-US')} stocks.`
+		);
 	}
 	if (error instanceof NoActiveWatchlistError) {
 		return errorResponse(409, 'NO_ACTIVE_WATCHLIST', 'There is no active watchlist.');

@@ -1,4 +1,5 @@
 import { json } from '@sveltejs/kit';
+import { parseStockSymbol } from '../../shared/stockSymbol';
 import { calculateTargetPriceDistance } from '../domain/investmentAllocation';
 import { MarketDataProviderError } from '../market-data/MarketDataProvider';
 import type { MarketDataProvider } from '../market-data/MarketDataProvider';
@@ -26,7 +27,11 @@ export async function setTargetPrice(
 	marketDataProvider: MarketDataProvider
 ): Promise<Response> {
 	const persisted = await targetPriceService.setTargetPrice(userId, symbol, targetPrice);
-	const normalizedSymbol = symbol.trim();
+	// TargetPriceService already rejected an invalid symbol above, so this
+	// mirrors the exact canonical (trim -> uppercase) key it persisted under
+	// (TASK-038) — using plain `.trim()` here would drift from that key for a
+	// mixed-case path symbol.
+	const normalizedSymbol = parseStockSymbol(symbol).symbol;
 	const persistedTargetPrice = persisted[normalizedSymbol];
 
 	let distanceToTarget: number | undefined;

@@ -3,13 +3,15 @@ import type {
 	WatchlistRepository,
 	WatchlistsDocument
 } from '../persistence/WatchlistRepository';
+import { isValidWatchlistName } from '../../shared/watchlistName';
 import {
 	DuplicateSymbolError,
 	InvalidSymbolError,
 	InvalidWatchlistNameError,
 	NoActiveWatchlistError,
 	SymbolNotFoundError,
-	WatchlistNotFoundError
+	WatchlistNotFoundError,
+	WatchlistStockLimitReachedError
 } from './WatchlistServiceErrors';
 
 export interface CreateWatchlistResult {
@@ -17,8 +19,26 @@ export interface CreateWatchlistResult {
 	document: WatchlistsDocument;
 }
 
+/**
+ * Maximum number of stocks a single Watchlist may contain (TASK-038). Bounds
+ * provider/application work, persistence growth, and composition/allocation/
+ * rendering workload for a single Watchlist.
+ */
+export const MAX_STOCKS_PER_WATCHLIST = 1_000;
+
 /** Isolated for deterministic testing; defaults to a platform-standard UUID. */
 export type WatchlistIdGenerator = () => string;
+
+/**
+ * Result of a successful admission check (TASK-038): the already-loaded
+ * document and the matched Watchlist's index, so a caller that needs to
+ * interleave provider work between admission and persistence (see
+ * `AddStockToWatchlistService`) can commit without a second repository read.
+ */
+export interface PreparedSymbolAddition {
+	readonly document: WatchlistsDocument;
+	readonly watchlistIndex: number;
+}
 
 function normalize(value: string): string {
 	return value.trim();
@@ -36,7 +56,7 @@ export class WatchlistService {
 
 	async createWatchlist(userId: string, name: string): Promise<CreateWatchlistResult> {
 		const trimmedName = normalize(name);
-		if (trimmedName.length === 0) {
+		if (!isValidWatchlistName(trimmedName)) {
 			throw new InvalidWatchlistNameError(name);
 		}
 
@@ -105,6 +125,24 @@ export class WatchlistService {
 			throw new InvalidSymbolError(symbol);
 		}
 
+		const prepared = await this.prepareAddSymbol(userId, watchlistId, trimmedSymbol);
+		return this.commitAddSymbol(userId, prepared, trimmedSymbol);
+	}
+
+	/**
+	 * Admission check only: loads the Watchlist, then rejects a missing
+	 * Watchlist, a full Watchlist (`MAX_STOCKS_PER_WATCHLIST`), or a duplicate
+	 * symbol — all before any persistence write. Split from `commitAddSymbol`
+	 * so `AddStockToWatchlistService` can run `MarketDataProvider.resolveSymbol()`
+	 * between admission and persistence without a wasted provider call for an
+	 * addition that cannot succeed, and without loading the document twice
+	 * (TASK-038 §65-67).
+	 */
+	async prepareAddSymbol(
+		userId: string,
+		watchlistId: string,
+		symbol: string
+	): Promise<PreparedSymbolAddition> {
 		const document = await this.repository.get(userId);
 		const watchlistIndex = document.watchlists.findIndex((w) => w.id === watchlistId);
 		if (watchlistIndex === -1) {
@@ -112,13 +150,27 @@ export class WatchlistService {
 		}
 
 		const watchlist = document.watchlists[watchlistIndex];
-		if (watchlist.symbols.includes(trimmedSymbol)) {
-			throw new DuplicateSymbolError(trimmedSymbol, watchlistId);
+		if (watchlist.symbols.length >= MAX_STOCKS_PER_WATCHLIST) {
+			throw new WatchlistStockLimitReachedError(watchlistId);
+		}
+		if (watchlist.symbols.includes(symbol)) {
+			throw new DuplicateSymbolError(symbol, watchlistId);
 		}
 
+		return { document, watchlistIndex };
+	}
+
+	/** Persists the symbol admitted by a prior `prepareAddSymbol` call, reusing its already-loaded document. */
+	async commitAddSymbol(
+		userId: string,
+		prepared: PreparedSymbolAddition,
+		symbol: string
+	): Promise<WatchlistsDocument> {
+		const { document, watchlistIndex } = prepared;
+		const watchlist = document.watchlists[watchlistIndex];
 		const updatedWatchlist: Watchlist = {
 			...watchlist,
-			symbols: [...watchlist.symbols, trimmedSymbol]
+			symbols: [...watchlist.symbols, symbol]
 		};
 		const updatedDocument: WatchlistsDocument = {
 			...document,

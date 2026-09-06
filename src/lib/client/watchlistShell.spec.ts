@@ -272,6 +272,33 @@ describe('createWatchlistAndActivate', () => {
 		expect(calls).toEqual([]);
 	});
 
+	it('does not call the API for a trimmed name over the maximum length (TASK-038)', async () => {
+		const api = fakeApi();
+		const { calls, handlers } = createHandlers();
+
+		await createWatchlistAndActivate(api, 'A'.repeat(51), handlers);
+
+		expect(api.createWatchlist).not.toHaveBeenCalled();
+		expect(calls).toEqual([]);
+	});
+
+	it('calls the API for a trimmed name of exactly the maximum length (TASK-038)', async () => {
+		const maxLengthName = 'A'.repeat(50);
+		const response = metadata({
+			activeWatchlistId: 'wl-3',
+			watchlists: [{ id: 'wl-3', name: maxLengthName }]
+		});
+		const api = fakeApi({
+			createWatchlist: vi.fn().mockResolvedValue(response),
+			loadWatchlist: vi.fn().mockResolvedValue(view('wl-3'))
+		});
+		const { handlers } = createHandlers();
+
+		await createWatchlistAndActivate(api, maxLengthName, handlers);
+
+		expect(api.createWatchlist).toHaveBeenCalledWith(maxLengthName);
+	});
+
 	it('sends the trimmed name, then loads the server-selected active watchlist', async () => {
 		const response = metadata({
 			activeWatchlistId: 'wl-3',
@@ -501,6 +528,16 @@ describe('addStockToActiveWatchlist', () => {
 		const { calls, handlers } = addHandlers();
 
 		await addStockToActiveWatchlist(api, 'wl-1', 'AAPL!', handlers);
+
+		expect(api.addStock).not.toHaveBeenCalled();
+		expect(calls).toEqual(['invalidSymbol']);
+	});
+
+	it('rejects an over-length symbol locally without calling the API (TASK-038)', async () => {
+		const api = fakeApi();
+		const { calls, handlers } = addHandlers();
+
+		await addStockToActiveWatchlist(api, 'wl-1', 'A'.repeat(21), handlers);
 
 		expect(api.addStock).not.toHaveBeenCalled();
 		expect(calls).toEqual(['invalidSymbol']);

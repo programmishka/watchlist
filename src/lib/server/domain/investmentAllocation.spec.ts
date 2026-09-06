@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_TOTAL_SAVINGS } from '../../shared/investmentSavings';
 import {
 	InvalidTotalSavingsError,
+	assertValidTotalSavings,
 	calculateFactorSum,
 	calculateInvestedTotal,
 	calculateInvestmentFactor,
@@ -155,6 +157,55 @@ describe('calculateSavingsAllocation', () => {
 		['-Infinity', -Infinity]
 	])('rejects %s totalSavings', (_label, totalSavings) => {
 		expect(() => calculateSavingsAllocation([1, 1], totalSavings)).toThrow(
+			InvalidTotalSavingsError
+		);
+	});
+});
+
+describe('assertValidTotalSavings', () => {
+	it('accepts zero', () => {
+		expect(() => assertValidTotalSavings(0)).not.toThrow();
+	});
+
+	it('accepts the maximum value', () => {
+		expect(() => assertValidTotalSavings(MAX_TOTAL_SAVINGS)).not.toThrow();
+	});
+
+	it('rejects one above the maximum value', () => {
+		expect(() => assertValidTotalSavings(MAX_TOTAL_SAVINGS + 1)).toThrow(InvalidTotalSavingsError);
+	});
+
+	it('rejects an unsafe integer, even though Number.isInteger would accept it', () => {
+		const unsafeInteger = Number.MAX_SAFE_INTEGER + 2;
+		expect(Number.isInteger(unsafeInteger)).toBe(true);
+		expect(Number.isSafeInteger(unsafeInteger)).toBe(false);
+		expect(() => assertValidTotalSavings(unsafeInteger)).toThrow(InvalidTotalSavingsError);
+	});
+
+	it.each([
+		['negative', -1],
+		['fractional', 12.5],
+		['NaN', Number.NaN],
+		['Infinity', Number.POSITIVE_INFINITY],
+		['-Infinity', Number.NEGATIVE_INFINITY]
+	])('rejects a %s value', (_label, totalSavings) => {
+		expect(() => assertValidTotalSavings(totalSavings)).toThrow(InvalidTotalSavingsError);
+	});
+});
+
+describe('calculateSavingsAllocation upper bound (TASK-038)', () => {
+	it('accepts the maximum totalSavings', () => {
+		expect(() => calculateSavingsAllocation([1], MAX_TOTAL_SAVINGS)).not.toThrow();
+	});
+
+	it('rejects totalSavings above the maximum', () => {
+		expect(() => calculateSavingsAllocation([1], MAX_TOTAL_SAVINGS + 1)).toThrow(
+			InvalidTotalSavingsError
+		);
+	});
+
+	it('rejects an unsafe integer totalSavings', () => {
+		expect(() => calculateSavingsAllocation([1], Number.MAX_SAFE_INTEGER + 2)).toThrow(
 			InvalidTotalSavingsError
 		);
 	});

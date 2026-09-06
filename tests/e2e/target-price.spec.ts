@@ -235,6 +235,30 @@ test.describe('Target Price editing', () => {
 		await expect(page.getByText('Failed to save target price')).toHaveCount(0);
 	});
 
+	test('the target price input has maxlength=20 in Table mode (TASK-038)', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'chromium-desktop', 'desktop-only: exercises Table mode');
+
+		await mockSingleWatchlist(page, [SAP_DE_STOCK]);
+		await page.goto('/');
+
+		await expect(page.getByRole('table')).toBeVisible();
+		await expect(page.getByLabel('Target price for SAP.DE')).toHaveAttribute('maxlength', '20');
+	});
+
+	test('the target price input has maxlength=20 in Card mode (TASK-038)', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'chromium-mobile', 'mobile-only: exercises Card mode');
+
+		await mockSingleWatchlist(page, [SAP_DE_STOCK]);
+		await page.goto('/');
+
+		await expect(page.getByRole('table')).toHaveCount(0);
+		await expect(page.getByLabel('Target price for SAP.DE')).toHaveAttribute('maxlength', '20');
+	});
+
 	test('mobile layout keeps the target price input reachable and usable', async ({
 		page
 	}, testInfo) => {

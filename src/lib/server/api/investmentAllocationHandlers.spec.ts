@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_TOTAL_SAVINGS } from '../../shared/investmentSavings';
 import { InvalidTotalSavingsError } from '../domain/investmentAllocation';
 import { MarketDataProviderError } from '../market-data/MarketDataProvider';
 import type { InvestmentAllocation } from '../investment-allocation/InvestmentAllocation';
@@ -28,9 +29,15 @@ describe('requireValidTotalSavings', () => {
 		['fractional', 12.5],
 		['NaN', Number.NaN],
 		['Infinity', Number.POSITIVE_INFINITY],
-		['-Infinity', Number.NEGATIVE_INFINITY]
+		['-Infinity', Number.NEGATIVE_INFINITY],
+		['above the maximum', MAX_TOTAL_SAVINGS + 1],
+		['an unsafe integer', Number.MAX_SAFE_INTEGER + 2]
 	])('throws InvalidTotalSavingsError for a %s value', (_label, totalSavings) => {
 		expect(() => requireValidTotalSavings({ totalSavings })).toThrow(InvalidTotalSavingsError);
+	});
+
+	it('accepts the maximum value', () => {
+		expect(requireValidTotalSavings({ totalSavings: MAX_TOTAL_SAVINGS })).toBe(MAX_TOTAL_SAVINGS);
 	});
 });
 

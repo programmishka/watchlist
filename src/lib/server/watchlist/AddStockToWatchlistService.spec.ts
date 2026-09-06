@@ -7,12 +7,13 @@ import type {
 } from '../market-data/MarketDataProvider';
 import type { WatchlistRepository, WatchlistsDocument } from '../persistence/WatchlistRepository';
 import { AddStockToWatchlistService } from './AddStockToWatchlistService';
-import { WatchlistService } from './WatchlistService';
+import { MAX_STOCKS_PER_WATCHLIST, WatchlistService } from './WatchlistService';
 import {
 	DuplicateSymbolError,
 	InvalidSymbolError,
 	UnknownStockSymbolError,
-	WatchlistNotFoundError
+	WatchlistNotFoundError,
+	WatchlistStockLimitReachedError
 } from './WatchlistServiceErrors';
 
 class FakeWatchlistRepository implements WatchlistRepository {
@@ -153,7 +154,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 		expect(watchlistRepository.saveCalls).toHaveLength(0);
 	});
 
-	it('calls the provider before WatchlistService rejects a duplicate symbol', async () => {
+	it('rejects a duplicate symbol before calling the provider (TASK-038 admission-ordering change)', async () => {
 		const watchlistRepository = new FakeWatchlistRepository(
 			new Map([['user-1', watchlistDocument('wl-1', ['AAPL'])]])
 		);
@@ -162,11 +163,11 @@ describe('AddStockToWatchlistService.addStock', () => {
 		const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
 
 		await expect(service.addStock('user-1', 'wl-1', 'AAPL')).rejects.toThrow(DuplicateSymbolError);
-		expect(marketDataProvider.resolveSymbolCalls).toEqual(['AAPL']);
+		expect(marketDataProvider.resolveSymbolCalls).toHaveLength(0);
 		expect(watchlistRepository.saveCalls).toHaveLength(0);
 	});
 
-	it('calls the provider before WatchlistService rejects a missing Watchlist', async () => {
+	it('rejects a missing Watchlist before calling the provider (TASK-038 admission-ordering change)', async () => {
 		const watchlistRepository = new FakeWatchlistRepository();
 		const watchlistService = new WatchlistService(watchlistRepository);
 		const marketDataProvider = new FakeMarketDataProvider(new Map([['AAPL', { symbol: 'AAPL' }]]));
@@ -175,8 +176,106 @@ describe('AddStockToWatchlistService.addStock', () => {
 		await expect(service.addStock('user-1', 'wl-missing', 'AAPL')).rejects.toThrow(
 			WatchlistNotFoundError
 		);
-		expect(marketDataProvider.resolveSymbolCalls).toEqual(['AAPL']);
+		expect(marketDataProvider.resolveSymbolCalls).toHaveLength(0);
 		expect(watchlistRepository.saveCalls).toHaveLength(0);
+	});
+
+	it.each([
+		['A'.repeat(21), 'over-length'],
+		['A'.repeat(5000), 'pathological (TASK-037 regression)']
+	])(
+		'rejects a %s syntactically-valid-shape symbol without calling the provider (TASK-038)',
+		async (symbol) => {
+			const watchlistRepository = new FakeWatchlistRepository(
+				new Map([['user-1', watchlistDocument('wl-1', [])]])
+			);
+			const watchlistService = new WatchlistService(watchlistRepository);
+			const marketDataProvider = new FakeMarketDataProvider();
+			const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
+
+			await expect(service.addStock('user-1', 'wl-1', symbol)).rejects.toThrow(InvalidSymbolError);
+			expect(marketDataProvider.resolveSymbolCalls).toHaveLength(0);
+			expect(watchlistRepository.saveCalls).toHaveLength(0);
+		}
+	);
+
+	it('accepts a symbol of exactly the maximum length', async () => {
+		const maxLengthSymbol = 'A'.repeat(20);
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', [])]])
+		);
+		const watchlistService = new WatchlistService(watchlistRepository);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([[maxLengthSymbol, { symbol: maxLengthSymbol }]])
+		);
+		const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
+
+		const result = await service.addStock('user-1', 'wl-1', maxLengthSymbol);
+
+		expect(marketDataProvider.resolveSymbolCalls).toEqual([maxLengthSymbol]);
+		expect(result.watchlists[0].symbols).toEqual([maxLengthSymbol]);
+	});
+
+	describe('Watchlist stock capacity (TASK-038)', () => {
+		function symbolsOfLength(count: number): string[] {
+			return Array.from({ length: count }, (_, index) => `SYM${index}`);
+		}
+
+		it('allows adding one more stock to a Watchlist with 999 stocks, reaching exactly 1000', async () => {
+			const existingSymbols = symbolsOfLength(MAX_STOCKS_PER_WATCHLIST - 1);
+			const watchlistRepository = new FakeWatchlistRepository(
+				new Map([['user-1', watchlistDocument('wl-1', existingSymbols)]])
+			);
+			const watchlistService = new WatchlistService(watchlistRepository);
+			const marketDataProvider = new FakeMarketDataProvider(
+				new Map([['AAPL', { symbol: 'AAPL' }]])
+			);
+			const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
+
+			const result = await service.addStock('user-1', 'wl-1', 'AAPL');
+
+			expect(result.watchlists[0].symbols).toHaveLength(MAX_STOCKS_PER_WATCHLIST);
+			expect(marketDataProvider.resolveSymbolCalls).toEqual(['AAPL']);
+		});
+
+		it('rejects an addition to a Watchlist already at exactly 1000 stocks, without calling the provider or saving', async () => {
+			const existingSymbols = symbolsOfLength(MAX_STOCKS_PER_WATCHLIST);
+			const watchlistRepository = new FakeWatchlistRepository(
+				new Map([['user-1', watchlistDocument('wl-1', existingSymbols)]])
+			);
+			const watchlistService = new WatchlistService(watchlistRepository);
+			const marketDataProvider = new FakeMarketDataProvider(
+				new Map([['AAPL', { symbol: 'AAPL' }]])
+			);
+			const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
+
+			await expect(service.addStock('user-1', 'wl-1', 'AAPL')).rejects.toThrow(
+				WatchlistStockLimitReachedError
+			);
+			expect(marketDataProvider.resolveSymbolCalls).toHaveLength(0);
+			expect(watchlistRepository.saveCalls).toHaveLength(0);
+		});
+
+		it('rejects an addition to a defensive over-limit Watchlist (> 1000 stocks) without truncating it', async () => {
+			const existingSymbols = symbolsOfLength(MAX_STOCKS_PER_WATCHLIST + 5);
+			const watchlistRepository = new FakeWatchlistRepository(
+				new Map([['user-1', watchlistDocument('wl-1', existingSymbols)]])
+			);
+			const watchlistService = new WatchlistService(watchlistRepository);
+			const marketDataProvider = new FakeMarketDataProvider(
+				new Map([['AAPL', { symbol: 'AAPL' }]])
+			);
+			const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
+
+			await expect(service.addStock('user-1', 'wl-1', 'AAPL')).rejects.toThrow(
+				WatchlistStockLimitReachedError
+			);
+			expect(marketDataProvider.resolveSymbolCalls).toHaveLength(0);
+			expect(watchlistRepository.saveCalls).toHaveLength(0);
+			expect((await watchlistRepository.get('user-1')).watchlists[0].symbols).toHaveLength(
+				MAX_STOCKS_PER_WATCHLIST + 5
+			);
+		});
 	});
 
 	it('persists Yahoo exchange-syntax symbols unchanged', async () => {
@@ -255,7 +354,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 		expect(result.watchlists[0].symbols).toEqual(['HEXA-B.ST']);
 	});
 
-	it('rejects a case-only duplicate of an already-persisted canonical symbol', async () => {
+	it('rejects a case-only duplicate of an already-persisted canonical symbol without calling the provider (TASK-038 admission-ordering change)', async () => {
 		const watchlistRepository = new FakeWatchlistRepository(
 			new Map([['user-1', watchlistDocument('wl-1', ['AAPL'])]])
 		);
@@ -264,7 +363,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 		const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
 
 		await expect(service.addStock('user-1', 'wl-1', 'aapl')).rejects.toThrow(DuplicateSymbolError);
-		expect(marketDataProvider.resolveSymbolCalls).toEqual(['AAPL']);
+		expect(marketDataProvider.resolveSymbolCalls).toHaveLength(0);
 		expect(watchlistRepository.saveCalls).toHaveLength(0);
 	});
 

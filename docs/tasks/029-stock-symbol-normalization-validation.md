@@ -4,6 +4,14 @@
 
 Done
 
+> **Extended by TASK-038.** TASK-038 later added a 20-character maximum
+> (`MAX_STOCK_SYMBOL_LENGTH`) to the existing stock-symbol grammar this task
+> established, enforced before `MarketDataProvider.resolveSymbol()`/
+> `getQuote()`, and applied it to every external Stock Symbol boundary
+> (stock addition and the Target Price `symbol` path parameter). The
+> normalization/grammar rule itself (trim, then uppercase, then the
+> `^[A-Z0-9]+(?:[.-][A-Z0-9]+)*$` pattern) is unchanged.
+
 ## Goal
 
 Introduce a single, explicit application rule for stock-symbol normalization and syntactic validation.

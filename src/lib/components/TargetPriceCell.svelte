@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { parseTargetPriceInput } from '$lib/client/targetPriceInput';
+	import { TARGET_PRICE_INPUT_MAX_LENGTH } from '$lib/shared/targetPrice';
 
 	export type TargetPriceSaveResult =
 		{ ok: true; warningMessage?: string } | { ok: false; message: string };
@@ -83,6 +84,7 @@
 	type="text"
 	inputmode="decimal"
 	class="target-price-input"
+	maxlength={TARGET_PRICE_INPUT_MAX_LENGTH}
 	aria-label={`Target price for ${symbol}`}
 	aria-invalid={errorMessage !== undefined}
 	aria-describedby={feedback ? feedbackId : undefined}

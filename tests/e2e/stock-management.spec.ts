@@ -482,6 +482,53 @@ test.describe('Stock management', () => {
 		await expect(page.getByRole('alert')).toContainText('The symbol already exists.');
 	});
 
+	test('the stock-symbol input has maxlength=20 and normal typing is unaffected (TASK-038)', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page);
+		const addCalls = await mockAddStock(page, WATCHLIST_ID, (symbol) => ({
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [SAP_DE_STOCK, GAW_L_STOCK, { ...AAPL_STOCK, symbol }],
+			warnings: []
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await expect(input).toHaveAttribute('maxlength', '20');
+
+		await input.fill('AAPL');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		expect(addCalls.calls).toEqual(['AAPL']);
+	});
+
+	test('displays the capacity error and leaves the watchlist unchanged when the server reports WATCHLIST_STOCK_LIMIT_REACHED (TASK-038)', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page);
+		await mockAddStock(page, WATCHLIST_ID, () => ({
+			status: 409,
+			body: {
+				error: {
+					code: 'WATCHLIST_STOCK_LIMIT_REACHED',
+					message: 'This watchlist can contain up to 1,000 stocks.'
+				}
+			}
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('AAPL');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		await expect(page.getByRole('alert')).toContainText(
+			'This watchlist can contain up to 1,000 stocks.'
+		);
+		await expect(input).toHaveValue('AAPL');
+		await expect(stockRows(page)).toHaveCount(2);
+	});
+
 	test('mobile layout keeps the add-stock form usable and the remove action reachable via Cards', async ({
 		page
 	}, testInfo) => {

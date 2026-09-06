@@ -3,13 +3,14 @@ import { createApplicationServices } from '$lib/server/composition/createApplica
 import { mapErrorToResponse } from '$lib/server/api/errorMapping';
 import { parseJsonBody, requireStringField } from '$lib/server/api/requestBody';
 import { deleteActiveWatchlist, selectActiveWatchlist } from '$lib/server/api/watchlistHandlers';
+import { requireValidWatchlistId } from '$lib/server/watchlist/watchlistIdBoundary';
 import type { RequestHandler } from './$types';
 
 export const PUT: RequestHandler = async ({ locals, platform, request }) => {
 	try {
 		const userId = requireUserId(locals);
 		const body = await parseJsonBody(request);
-		const watchlistId = requireStringField(body, 'watchlistId');
+		const watchlistId = requireValidWatchlistId(requireStringField(body, 'watchlistId'));
 		const { watchlistService } = createApplicationServices(platform);
 		return await selectActiveWatchlist(userId, watchlistId, watchlistService);
 	} catch (error) {

@@ -58,3 +58,15 @@ export class UnknownStockSymbolError extends Error {
 		this.name = 'UnknownStockSymbolError';
 	}
 }
+
+/**
+ * Thrown when a Watchlist has already reached `MAX_STOCKS_PER_WATCHLIST`
+ * (TASK-038). Distinct from `DuplicateSymbolError` — this covers a full
+ * Watchlist regardless of whether the attempted symbol is itself new.
+ */
+export class WatchlistStockLimitReachedError extends Error {
+	constructor(watchlistId: string) {
+		super(`Watchlist ${watchlistId} has reached its maximum stock capacity.`);
+		this.name = 'WatchlistStockLimitReachedError';
+	}
+}

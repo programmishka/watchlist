@@ -456,6 +456,27 @@ test.describe('Watchlist management', () => {
 		await expect(page.getByRole('button', { name: 'Remove watchlist "Dividend"' })).toHaveCount(0);
 	});
 
+	test('the watchlist-name input has maxlength=50 and rejects an over-limit name locally (TASK-038)', async ({
+		page
+	}) => {
+		await mockWatchlistsMetadata(page, { watchlists: [] });
+		const createCalls = await mockCreateWatchlist(page, (name) => ({
+			activeWatchlistId: 'wl-1',
+			watchlists: [{ id: 'wl-1', name }]
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Watchlist name');
+		await expect(input).toHaveAttribute('maxlength', '50');
+
+		// Browser-native maxlength prevents typing more than 50 characters.
+		await input.fill('A'.repeat(60));
+		await expect(input).toHaveValue('A'.repeat(50));
+		await page.getByRole('button', { name: 'Add watchlist' }).click();
+
+		expect(createCalls.calls).toEqual(['A'.repeat(50)]);
+	});
+
 	test('mobile layout keeps create/delete controls and tabs usable without page overflow', async ({
 		page
 	}, testInfo) => {

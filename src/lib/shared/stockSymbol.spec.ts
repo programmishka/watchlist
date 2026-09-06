@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isValidStockSymbol, normalizeStockSymbol, parseStockSymbol } from './stockSymbol';
+import {
+	MAX_STOCK_SYMBOL_LENGTH,
+	isValidStockSymbol,
+	normalizeStockSymbol,
+	parseStockSymbol
+} from './stockSymbol';
 
 describe('normalizeStockSymbol', () => {
 	it.each([
@@ -39,9 +44,19 @@ describe('isValidStockSymbol', () => {
 		expect(isValidStockSymbol(symbol)).toBe(false);
 	});
 
-	it('imposes no arbitrary maximum length', () => {
-		const longSymbol = 'A'.repeat(200);
-		expect(isValidStockSymbol(longSymbol)).toBe(true);
+	it('accepts a symbol of exactly the maximum length (TASK-038)', () => {
+		const maxLengthSymbol = 'A'.repeat(MAX_STOCK_SYMBOL_LENGTH);
+		expect(isValidStockSymbol(maxLengthSymbol)).toBe(true);
+	});
+
+	it('rejects a symbol one character over the maximum length (TASK-038)', () => {
+		const overLengthSymbol = 'A'.repeat(MAX_STOCK_SYMBOL_LENGTH + 1);
+		expect(isValidStockSymbol(overLengthSymbol)).toBe(false);
+	});
+
+	it('rejects a pathologically long symbol, proving the bound holds regardless of magnitude (TASK-037 regression)', () => {
+		const pathologicalSymbol = 'A'.repeat(5000);
+		expect(isValidStockSymbol(pathologicalSymbol)).toBe(false);
 	});
 });
 

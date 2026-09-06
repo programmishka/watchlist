@@ -5,6 +5,7 @@ import type { TargetPriceRepository, TargetPrices } from '../persistence/TargetP
 import { setTargetPrice } from '../api/targetPriceHandlers';
 import type { TargetPriceMutationResponse } from '../api/targetPriceHandlers';
 import { TargetPriceService } from './TargetPriceService';
+import { InvalidSymbolError } from './TargetPriceServiceErrors';
 
 class FakeTargetPriceRepository implements TargetPriceRepository {
 	constructor(private readonly documents = new Map<string, TargetPrices>()) {}
@@ -18,9 +19,17 @@ class FakeTargetPriceRepository implements TargetPriceRepository {
 	}
 }
 
-function marketDataProvider(quote?: StockMarketData, error?: Error): MarketDataProvider {
+function marketDataProvider(
+	quote?: StockMarketData,
+	error?: Error
+): MarketDataProvider & {
+	getQuoteCalls: string[];
+} {
+	const getQuoteCalls: string[] = [];
 	return {
-		async getQuote(): Promise<StockMarketData | undefined> {
+		getQuoteCalls,
+		async getQuote(symbol: string): Promise<StockMarketData | undefined> {
+			getQuoteCalls.push(symbol);
 			if (error) {
 				throw error;
 			}
@@ -120,5 +129,52 @@ describe('setTargetPrice route handler', () => {
 
 		expect(body.symbol).toBe('GAW.L');
 		expect(await repository.get('user-1')).toEqual({ 'GAW.L': 150 });
+	});
+
+	it('canonicalizes a lowercase path symbol to uppercase before persistence, lookup, and the response (TASK-038)', async () => {
+		const repository = new FakeTargetPriceRepository();
+		const targetPriceService = new TargetPriceService(repository);
+		const provider = marketDataProvider({ symbol: 'AAPL', price: 100 });
+
+		const body = (await (
+			await setTargetPrice('user-1', 'aapl', 150, targetPriceService, provider)
+		).json()) as TargetPriceMutationResponse;
+
+		expect(body.symbol).toBe('AAPL');
+		expect(await repository.get('user-1')).toEqual({ AAPL: 150 });
+		expect(provider.getQuoteCalls).toEqual(['AAPL']);
+	});
+
+	it('rejects an invalid path symbol before any provider call (TASK-038)', async () => {
+		const targetPriceService = new TargetPriceService(new FakeTargetPriceRepository());
+		const provider = marketDataProvider();
+
+		await expect(
+			setTargetPrice('user-1', 'AAPL!', 150, targetPriceService, provider)
+		).rejects.toThrow(InvalidSymbolError);
+		expect(provider.getQuoteCalls).toHaveLength(0);
+	});
+
+	it('rejects an over-length path symbol before any provider call (TASK-038)', async () => {
+		const targetPriceService = new TargetPriceService(new FakeTargetPriceRepository());
+		const provider = marketDataProvider();
+
+		await expect(
+			setTargetPrice('user-1', 'A'.repeat(21), 150, targetPriceService, provider)
+		).rejects.toThrow(InvalidSymbolError);
+		expect(provider.getQuoteCalls).toHaveLength(0);
+	});
+
+	it('unifies case-differing path symbols under one Target Price identity (TASK-038)', async () => {
+		const repository = new FakeTargetPriceRepository();
+		const targetPriceService = new TargetPriceService(repository);
+		const provider = marketDataProvider({ symbol: 'AAPL', price: 100 });
+
+		await setTargetPrice('user-1', 'AAPL', 150, targetPriceService, provider);
+		await setTargetPrice('user-1', 'aapl', 160, targetPriceService, provider);
+
+		// A second write under a different case updates the SAME key rather
+		// than creating a separate "aapl" entry.
+		expect(await repository.get('user-1')).toEqual({ AAPL: 160 });
 	});
 });

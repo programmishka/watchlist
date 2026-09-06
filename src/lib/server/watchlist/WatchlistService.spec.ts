@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { WatchlistRepository, WatchlistsDocument } from '../persistence/WatchlistRepository';
-import { WatchlistService } from './WatchlistService';
+import { MAX_WATCHLIST_NAME_LENGTH } from '../../shared/watchlistName';
+import { MAX_STOCKS_PER_WATCHLIST, WatchlistService } from './WatchlistService';
 import {
 	DuplicateSymbolError,
 	InvalidSymbolError,
 	InvalidWatchlistNameError,
 	NoActiveWatchlistError,
 	SymbolNotFoundError,
-	WatchlistNotFoundError
+	WatchlistNotFoundError,
+	WatchlistStockLimitReachedError
 } from './WatchlistServiceErrors';
 
 class FakeWatchlistRepository implements WatchlistRepository {
@@ -144,6 +146,37 @@ describe('WatchlistService.createWatchlist', () => {
 		await expect(service.createWatchlist('user-1', 'Main')).rejects.toThrow(
 			'simulated KV write failure'
 		);
+	});
+
+	it('accepts a trimmed name of exactly the maximum length (TASK-038)', async () => {
+		const repository = new FakeWatchlistRepository();
+		const service = new WatchlistService(repository, sequentialIdGenerator());
+		const maxLengthName = 'A'.repeat(MAX_WATCHLIST_NAME_LENGTH);
+
+		const result = await service.createWatchlist('user-1', maxLengthName);
+
+		expect(result.watchlist.name).toBe(maxLengthName);
+	});
+
+	it('rejects a trimmed name one character over the maximum length without saving (TASK-038)', async () => {
+		const repository = new FakeWatchlistRepository();
+		const service = new WatchlistService(repository, sequentialIdGenerator());
+		const overLengthName = 'A'.repeat(MAX_WATCHLIST_NAME_LENGTH + 1);
+
+		await expect(service.createWatchlist('user-1', overLengthName)).rejects.toThrow(
+			InvalidWatchlistNameError
+		);
+		expect(repository.saveCalls).toHaveLength(0);
+	});
+
+	it('measures the maximum length after trimming, not before (TASK-038)', async () => {
+		const repository = new FakeWatchlistRepository();
+		const service = new WatchlistService(repository, sequentialIdGenerator());
+		const nameWithPadding = `  ${'A'.repeat(MAX_WATCHLIST_NAME_LENGTH)}  `;
+
+		const result = await service.createWatchlist('user-1', nameWithPadding);
+
+		expect(result.watchlist.name).toBe('A'.repeat(MAX_WATCHLIST_NAME_LENGTH));
 	});
 });
 
@@ -418,6 +451,53 @@ describe('WatchlistService.addSymbol', () => {
 
 		expect(result.watchlists[0].symbols).toEqual(['HEXA-B.ST']);
 	});
+
+	it('allows adding a symbol to a Watchlist with 999 stocks, reaching exactly 1000 (TASK-038)', async () => {
+		const existingSymbols = Array.from({ length: MAX_STOCKS_PER_WATCHLIST - 1 }, (_, i) => `S${i}`);
+		const repository = new FakeWatchlistRepository();
+		repository.seed('user-1', {
+			activeWatchlistId: 'wl-1',
+			watchlists: [{ id: 'wl-1', name: 'Main', symbols: existingSymbols }]
+		});
+		const service = new WatchlistService(repository);
+
+		const result = await service.addSymbol('user-1', 'wl-1', 'AAPL');
+
+		expect(result.watchlists[0].symbols).toHaveLength(MAX_STOCKS_PER_WATCHLIST);
+	});
+
+	it('rejects adding a symbol to a Watchlist already at 1000 stocks, without saving (TASK-038)', async () => {
+		const existingSymbols = Array.from({ length: MAX_STOCKS_PER_WATCHLIST }, (_, i) => `S${i}`);
+		const repository = new FakeWatchlistRepository();
+		repository.seed('user-1', {
+			activeWatchlistId: 'wl-1',
+			watchlists: [{ id: 'wl-1', name: 'Main', symbols: existingSymbols }]
+		});
+		const service = new WatchlistService(repository);
+
+		await expect(service.addSymbol('user-1', 'wl-1', 'AAPL')).rejects.toThrow(
+			WatchlistStockLimitReachedError
+		);
+		expect(repository.saveCalls).toHaveLength(0);
+	});
+
+	it('rejects adding a symbol to a defensive over-limit Watchlist without truncating it (TASK-038)', async () => {
+		const existingSymbols = Array.from({ length: MAX_STOCKS_PER_WATCHLIST + 5 }, (_, i) => `S${i}`);
+		const repository = new FakeWatchlistRepository();
+		repository.seed('user-1', {
+			activeWatchlistId: 'wl-1',
+			watchlists: [{ id: 'wl-1', name: 'Main', symbols: existingSymbols }]
+		});
+		const service = new WatchlistService(repository);
+
+		await expect(service.addSymbol('user-1', 'wl-1', 'AAPL')).rejects.toThrow(
+			WatchlistStockLimitReachedError
+		);
+		expect(repository.saveCalls).toHaveLength(0);
+		expect((await repository.get('user-1')).watchlists[0].symbols).toHaveLength(
+			MAX_STOCKS_PER_WATCHLIST + 5
+		);
+	});
 });
 
 describe('WatchlistService.removeSymbol', () => {
@@ -510,6 +590,20 @@ describe('WatchlistService.removeSymbol', () => {
 		const service = new WatchlistService(repository);
 
 		await expect(service.removeSymbol('user-1', 'wl-1', 'AAPL')).resolves.toBeDefined();
+	});
+
+	it('remains removable from a defensive over-limit Watchlist (TASK-038 §60)', async () => {
+		const existingSymbols = Array.from({ length: MAX_STOCKS_PER_WATCHLIST + 5 }, (_, i) => `S${i}`);
+		const repository = new FakeWatchlistRepository();
+		repository.seed('user-1', {
+			activeWatchlistId: 'wl-1',
+			watchlists: [{ id: 'wl-1', name: 'Main', symbols: existingSymbols }]
+		});
+		const service = new WatchlistService(repository);
+
+		const result = await service.removeSymbol('user-1', 'wl-1', 'S0');
+
+		expect(result.watchlists[0].symbols).toHaveLength(MAX_STOCKS_PER_WATCHLIST + 4);
 	});
 });
 

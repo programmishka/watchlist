@@ -27,7 +27,14 @@
 		setTargetPriceForActiveStock,
 		switchActiveWatchlist
 	} from '$lib/client/watchlistShell';
-	import { filterStocksByCompanyName, formatStockCount } from '$lib/client/watchlistFilter';
+	import {
+		MAX_COMPANY_NAME_FILTER_LENGTH,
+		filterStocksByCompanyName,
+		formatStockCount
+	} from '$lib/client/watchlistFilter';
+	import { MAX_WATCHLIST_NAME_LENGTH } from '$lib/shared/watchlistName';
+	import { MAX_STOCK_SYMBOL_LENGTH } from '$lib/shared/stockSymbol';
+	import { TOTAL_SAVINGS_INPUT_MAX_LENGTH } from '$lib/shared/investmentSavings';
 	import {
 		DEFAULT_WATCHLIST_SORT,
 		sortWatchlistStocks,
@@ -475,6 +482,7 @@
 					class="field-input create-input"
 					type="text"
 					placeholder="New watchlist name"
+					maxlength={MAX_WATCHLIST_NAME_LENGTH}
 					bind:value={newWatchlistName}
 					disabled={managementBusy}
 					autocomplete="off"
@@ -531,6 +539,7 @@
 							class="field-input stock-symbol-input"
 							type="text"
 							placeholder="Stock symbol"
+							maxlength={MAX_STOCK_SYMBOL_LENGTH}
 							value={newStockSymbol}
 							oninput={handleStockSymbolInput}
 							disabled={managementBusy}
@@ -555,6 +564,7 @@
 								class="field-input filter-input"
 								type="text"
 								placeholder="Filter by company name"
+								maxlength={MAX_COMPANY_NAME_FILTER_LENGTH}
 								bind:value={companyNameFilter}
 								autocomplete="off"
 							/>
@@ -568,6 +578,7 @@
 								type="text"
 								inputmode="numeric"
 								placeholder="Total savings"
+								maxlength={TOTAL_SAVINGS_INPUT_MAX_LENGTH}
 								bind:value={totalSavingsInput}
 								aria-invalid={allocationInputError !== undefined}
 								aria-describedby={allocationInputError || allocationError
