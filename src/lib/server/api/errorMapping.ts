@@ -71,7 +71,7 @@ export function mapErrorToResponse(error: unknown): Response {
 		return errorResponse(409, 'NO_ACTIVE_WATCHLIST', 'There is no active watchlist.');
 	}
 	if (error instanceof UnknownStockSymbolError) {
-		return errorResponse(422, 'UNKNOWN_STOCK_SYMBOL', 'The stock symbol could not be found.');
+		return errorResponse(422, 'UNKNOWN_STOCK_SYMBOL', 'This is not a supported stock symbol.');
 	}
 	if (error instanceof MarketDataProviderError) {
 		return errorResponse(503, 'MARKET_DATA_UNAVAILABLE', 'Market data is currently unavailable.');

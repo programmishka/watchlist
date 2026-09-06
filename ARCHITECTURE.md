@@ -581,9 +581,82 @@ ETFs, options, funds, cryptocurrencies, and other non-equity instruments are
 outside the intended product scope. TASK-029 establishes only normalization
 and syntax validation; it deliberately does not enforce this at the
 provider/data level (e.g. rejecting a syntactically valid but non-equity
-symbol). Provider-backed `quoteType === EQUITY` enforcement, and a
-`MarketDataProvider.resolveSymbol()`-style capability, are explicitly
-deferred to a later task (TASK-030).
+symbol). Provider-backed equity enforcement is implemented by TASK-030,
+described next.
+
+#### 12.1.2 Provider-Neutral Equity Resolution (TASK-030)
+
+TASK-030 adds the semantic admission step syntax validation alone cannot
+provide:
+
+```text
+TASK-012 (superseded)
+getQuote-based admission validation (symbol exists)
+        ↓
+TASK-029
+normalization + syntax validation
+        ↓
+TASK-030
+provider-neutral equity resolution (symbol exists AND is a supported equity)
+```
+
+> A syntactically valid stock identifier is eligible for addition only when
+> the configured `MarketDataProvider` resolves the exact normalized symbol as
+> a supported equity.
+
+This is expressed as a provider-neutral contract:
+
+```ts
+interface ResolvedMarketSymbol {
+  symbol: string;
+}
+
+interface MarketDataProvider {
+  resolveSymbol(symbol: string): Promise<ResolvedMarketSymbol | undefined>;
+}
+```
+
+`resolveSymbol()` and `getQuote()`/`getQuotes()` serve different purposes and
+are not interchangeable:
+
+```text
+resolveSymbol()
+→ admission/existence/instrument-class check, used only when adding a new
+  stock to a Watchlist
+
+getQuote()/getQuotes()
+→ current market-data retrieval, used for composing an already-persisted
+  Watchlist (§15.3); never re-runs equity resolution
+```
+
+A resolved result means the exact requested symbol is a supported equity. An
+`undefined` result means either that the symbol is unknown to the provider,
+or that the provider recognizes it as a non-equity instrument (ETF, fund,
+option, future, index, cryptocurrency, etc.) — `AddStockToWatchlistService`
+does not distinguish these two cases; both surface as the existing
+`UnknownStockSymbolError` / `UNKNOWN_STOCK_SYMBOL` (§24.3). A genuine
+provider failure remains a distinct `MarketDataProviderError` /
+`MARKET_DATA_UNAVAILABLE` and is never converted to a resolution failure.
+`resolveSymbol()` requires exact symbol identity — it never accepts a
+provider-returned alias or a fuzzy/canonicalized match, and the
+already-normalized input symbol (not any provider-returned symbol) is what
+gets persisted, unchanged from TASK-029.
+
+The Yahoo implementation (`YahooFinanceAdapter.resolveSymbol()`) uses the
+existing `quote()` module — no additional `yahoo-finance2` module and no
+Yahoo Search are used. It checks that the response's `symbol` field exactly
+equals the requested symbol and that its `quoteType` field equals `"EQUITY"`
+(verified against installed `yahoo-finance2@4.0.2`'s `quote.d.ts`/
+`quote.schema.d.ts`, which discriminates quote responses by `quoteType`
+across values including `EQUITY`, `ETF`, `MUTUALFUND`, `OPTION`, `FUTURE`,
+`INDEX`, `CRYPTOCURRENCY`, and `CURRENCY`). Both `quoteType` and the
+exact-match check are internal to the adapter — application/domain code
+never queries `quoteType` itself. Because this reuses the already-verified
+`quote()` module and compatibility flags, no additional Cloudflare/workerd
+verification beyond TASK-002's existing spike was required.
+
+TASK-030 does not migrate or revalidate existing persisted Watchlist
+symbols; it governs new stock additions only.
 
 Adding a stock does not create, update, or load a target price. If a target price already exists for:
 
@@ -775,6 +848,11 @@ Market data is loaded:
 * when switching to another watchlist.
 
 All symbols of the selected watchlist should be requested as a batch where the provider permits it.
+
+Ordinary Watchlist loading uses only `getQuote()`/`getQuotes()`. It never
+calls `resolveSymbol()` (§12.1.2), which is exclusively the admission check
+for adding a new stock; persisted symbols are not re-validated as equities
+on every load.
 
 The initial architecture does not persist or explicitly cache market data.
 

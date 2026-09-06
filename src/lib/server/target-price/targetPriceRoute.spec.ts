@@ -28,6 +28,9 @@ function marketDataProvider(quote?: StockMarketData, error?: Error): MarketDataP
 		},
 		async getQuotes() {
 			throw new Error('getQuotes should not be called by the Target Price route');
+		},
+		async resolveSymbol() {
+			throw new Error('resolveSymbol should not be called by the Target Price route');
 		}
 	};
 }

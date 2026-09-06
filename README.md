@@ -6,7 +6,7 @@ The project is also an exploration of **agent-assisted software engineering**: p
 
 ## What the Application Does
 
-Watchlist is designed for investors who already own or follow a portfolio of individual stocks and want to decide **where new capital should be invested based on the relationship between the current market price and their own valuation**.
+Watchlist is designed for investors who already own or follow a portfolio of individual stocks — equities representing companies that can be individually valued — and want to decide **where new capital should be invested based on the relationship between the current market price and their own valuation**. It intentionally does not manage ETFs, mutual funds, options, futures, cryptocurrencies, indices, or other non-equity instruments; adding a stock requires that the configured market-data provider resolves it as a supported equity, not merely that the symbol exists.
 
 The central concept is the **Target Price**.
 
@@ -301,6 +301,8 @@ Review and regression verification
 This allowed the application to evolve from actual usage rather than from an upfront feature list alone.
 
 The first such observation-driven change (TASK-029) came from noticing that a lowercase entry like `aapl` was sent to the market-data provider unchanged instead of as `AAPL`. Stock symbols are now trimmed, normalized to uppercase, and syntax-validated before being checked against the market-data provider or saved, so `aapl` and `AAPL` are treated as the same stock.
+
+A follow-up change (TASK-030) closed a related gap: a syntactically valid symbol that merely _existed_ according to the market-data provider was previously accepted even if it represented an ETF, fund, or other non-equity instrument outside the product's intended scope. A new symbol is now normalized, syntax-validated, and only added once the provider confirms it as a supported equity — both an unrecognized symbol and a recognized-but-unsupported instrument are rejected with the same understandable "not a supported stock symbol" outcome.
 
 The repository therefore documents not only the resulting software, but also the **engineering process used to build and evolve it with AI agents under explicit human product and architectural control**.
 

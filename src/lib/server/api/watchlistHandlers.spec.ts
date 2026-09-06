@@ -7,6 +7,7 @@ import {
 import type {
 	MarketDataBatchResult,
 	MarketDataProvider,
+	ResolvedMarketSymbol,
 	StockMarketData
 } from '../market-data/MarketDataProvider';
 import type { TargetPriceRepository, TargetPrices } from '../persistence/TargetPriceRepository';
@@ -67,6 +68,11 @@ class FakeMarketDataProvider implements MarketDataProvider {
 		const found = [...this.quotesBySymbol.values()].filter((quote) => requested.has(quote.symbol));
 		const foundSymbols = new Set(found.map((quote) => quote.symbol));
 		return { found, missing: symbols.filter((symbol) => !foundSymbols.has(symbol)) };
+	}
+
+	async resolveSymbol(symbol: string): Promise<ResolvedMarketSymbol | undefined> {
+		const quote = this.quotesBySymbol.get(symbol);
+		return quote && quote.symbol === symbol ? { symbol: quote.symbol } : undefined;
 	}
 }
 

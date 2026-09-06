@@ -16,6 +16,13 @@ import type { WatchlistService } from './WatchlistService';
  * validated before it ever reaches the provider, and that normalized symbol
  * — not the raw input — is what the provider validates and `WatchlistService`
  * persists.
+ *
+ * TASK-030 supersedes TASK-012's `getQuote`-based admission check with
+ * `resolveSymbol()`: a symbol is only admitted when the provider confirms it
+ * is a supported equity, not merely that it exists. `resolveSymbol()`
+ * returning `undefined` covers both "unknown symbol" and "known but
+ * unsupported instrument" — the service does not and must not distinguish
+ * them, both surface as `UnknownStockSymbolError`.
  */
 export class AddStockToWatchlistService {
 	constructor(
@@ -29,8 +36,8 @@ export class AddStockToWatchlistService {
 			throw new InvalidSymbolError(symbol);
 		}
 
-		const marketData = await this.marketDataProvider.getQuote(parsed.symbol);
-		if (!marketData) {
+		const resolved = await this.marketDataProvider.resolveSymbol(parsed.symbol);
+		if (!resolved) {
 			throw new UnknownStockSymbolError(parsed.symbol);
 		}
 

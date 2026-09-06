@@ -45,8 +45,11 @@ export class SymbolNotFoundError extends Error {
 }
 
 /**
- * The market-data provider successfully answered but does not recognize the
- * symbol — distinct from `MarketDataProviderError`, which means the provider
+ * The market-data provider successfully answered but did not resolve the
+ * symbol as a supported equity (TASK-030) — covers both an unrecognized
+ * symbol and a symbol the provider knows but classifies as a non-equity
+ * instrument (ETF, fund, option, etc.); the caller does not distinguish
+ * these. Distinct from `MarketDataProviderError`, which means the provider
  * itself is unavailable/failed.
  */
 export class UnknownStockSymbolError extends Error {

@@ -8,6 +8,7 @@ import { MarketDataProviderError } from '../market-data/MarketDataProvider';
 import type {
 	MarketDataBatchResult,
 	MarketDataProvider,
+	ResolvedMarketSymbol,
 	StockMarketData
 } from '../market-data/MarketDataProvider';
 import type { TargetPriceRepository, TargetPrices } from '../persistence/TargetPriceRepository';
@@ -64,6 +65,10 @@ class FakeMarketDataProvider implements MarketDataProvider {
 		const foundSymbols = new Set(found.map((quote) => quote.symbol));
 		const missing = symbols.filter((symbol) => !foundSymbols.has(symbol));
 		return { found, missing };
+	}
+
+	async resolveSymbol(): Promise<ResolvedMarketSymbol | undefined> {
+		throw new Error('resolveSymbol should not be called during Watchlist loading');
 	}
 }
 

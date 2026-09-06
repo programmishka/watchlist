@@ -3,6 +3,7 @@ import {
 	MarketDataProviderError,
 	type MarketDataBatchResult,
 	type MarketDataProvider,
+	type ResolvedMarketSymbol,
 	type StockMarketData
 } from './MarketDataProvider';
 
@@ -10,9 +11,17 @@ import {
  * The subset of Yahoo's quote fields this adapter maps. Kept minimal and
  * independent of yahoo-finance2's own `Quote` union type so this file is the
  * only place that needs to understand Yahoo's field names/shape.
+ *
+ * `quoteType` (TASK-030) is the verified Yahoo discriminator field
+ * (`quote.schema.d.ts`/`quote.d.ts` in the installed `yahoo-finance2@4.0.2`)
+ * used only inside `resolveSymbol()` below to distinguish a supported
+ * `"EQUITY"` from other instrument classes (`ETF`, `MUTUALFUND`, `OPTION`,
+ * `FUTURE`, `INDEX`, `CRYPTOCURRENCY`, `CURRENCY`, ...); it is never mapped
+ * into `StockMarketData` or exposed outside this adapter.
  */
 interface YahooQuoteFields {
 	symbol: string;
+	quoteType?: string;
 	longName?: string;
 	regularMarketPrice?: number;
 	currency?: string;
@@ -62,6 +71,23 @@ export class YahooFinanceAdapter implements MarketDataProvider {
 		}
 
 		return quote ? mapYahooQuote(quote) : undefined;
+	}
+
+	async resolveSymbol(symbol: string): Promise<ResolvedMarketSymbol | undefined> {
+		let quote: YahooQuoteFields | undefined;
+		try {
+			quote = await this.client.quote(symbol);
+		} catch (error) {
+			throw new MarketDataProviderError(`Failed to resolve symbol "${symbol}"`, {
+				cause: error
+			});
+		}
+
+		if (!quote || quote.symbol !== symbol || quote.quoteType !== 'EQUITY') {
+			return undefined;
+		}
+
+		return { symbol: quote.symbol };
 	}
 
 	async getQuotes(symbols: string[]): Promise<MarketDataBatchResult> {

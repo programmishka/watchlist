@@ -105,6 +105,96 @@ describe('YahooFinanceAdapter.getQuote', () => {
 	});
 });
 
+describe('YahooFinanceAdapter.resolveSymbol', () => {
+	it('resolves a supported equity (exact symbol + quoteType EQUITY)', async () => {
+		const client = fakeClient(async () => ({ ...AAPL_QUOTE, quoteType: 'EQUITY' }));
+		const adapter = new YahooFinanceAdapter(client);
+
+		const result = await adapter.resolveSymbol('AAPL');
+
+		expect(result).toEqual({ symbol: 'AAPL' });
+	});
+
+	it('resolves an international exchange-suffixed equity', async () => {
+		const client = fakeClient(async () => ({
+			symbol: 'SAP.DE',
+			quoteType: 'EQUITY',
+			longName: 'SAP SE',
+			regularMarketPrice: 184.94,
+			currency: 'EUR'
+		}));
+		const adapter = new YahooFinanceAdapter(client);
+
+		const result = await adapter.resolveSymbol('SAP.DE');
+
+		expect(result).toEqual({ symbol: 'SAP.DE' });
+	});
+
+	it('resolves a numeric-ticker equity', async () => {
+		const client = fakeClient(async () => ({
+			symbol: '0700.HK',
+			quoteType: 'EQUITY',
+			longName: 'Tencent Holdings Limited'
+		}));
+		const adapter = new YahooFinanceAdapter(client);
+
+		const result = await adapter.resolveSymbol('0700.HK');
+
+		expect(result).toEqual({ symbol: '0700.HK' });
+	});
+
+	it('does not resolve when the provider returns a different symbol than requested', async () => {
+		const client = fakeClient(async () => ({
+			symbol: 'SOMETHING-ELSE',
+			quoteType: 'EQUITY'
+		}));
+		const adapter = new YahooFinanceAdapter(client);
+
+		const result = await adapter.resolveSymbol('AAPL');
+
+		expect(result).toBeUndefined();
+	});
+
+	it('does not resolve a known non-equity instrument (e.g. an ETF)', async () => {
+		const client = fakeClient(async () => ({
+			symbol: 'SPY',
+			quoteType: 'ETF',
+			longName: 'SPDR S&P 500 ETF Trust'
+		}));
+		const adapter = new YahooFinanceAdapter(client);
+
+		const result = await adapter.resolveSymbol('SPY');
+
+		expect(result).toBeUndefined();
+	});
+
+	it('does not resolve an unknown symbol', async () => {
+		const client = fakeClient(async () => undefined);
+		const adapter = new YahooFinanceAdapter(client);
+
+		const result = await adapter.resolveSymbol('NOTAREALSYMBOL123');
+
+		expect(result).toBeUndefined();
+	});
+
+	it('throws MarketDataProviderError, preserving the cause, when the client fails', async () => {
+		const originalError = new Error('network down');
+		const client = fakeClient(async () => {
+			throw originalError;
+		});
+		const adapter = new YahooFinanceAdapter(client);
+
+		await expect(adapter.resolveSymbol('AAPL')).rejects.toThrow(MarketDataProviderError);
+		try {
+			await adapter.resolveSymbol('AAPL');
+			expect.unreachable();
+		} catch (error) {
+			expect(error).toBeInstanceOf(MarketDataProviderError);
+			expect((error as MarketDataProviderError).cause).toBe(originalError);
+		}
+	});
+});
+
 describe('YahooFinanceAdapter.getQuotes', () => {
 	it('returns mapped data for multiple successful symbols', async () => {
 		const client = fakeClient(async () => [

@@ -3,7 +3,7 @@ import { MarketDataProviderError } from '../market-data/MarketDataProvider';
 import type {
 	MarketDataBatchResult,
 	MarketDataProvider,
-	StockMarketData
+	ResolvedMarketSymbol
 } from '../market-data/MarketDataProvider';
 import type { WatchlistRepository, WatchlistsDocument } from '../persistence/WatchlistRepository';
 import { AddStockToWatchlistService } from './AddStockToWatchlistService';
@@ -30,22 +30,26 @@ class FakeWatchlistRepository implements WatchlistRepository {
 }
 
 class FakeMarketDataProvider implements MarketDataProvider {
-	getQuoteCalls: string[] = [];
+	resolveSymbolCalls: string[] = [];
 	constructor(
-		private readonly quotesBySymbol = new Map<string, StockMarketData>(),
+		private readonly resolvableSymbols = new Map<string, ResolvedMarketSymbol>(),
 		private readonly error?: Error
 	) {}
 
-	async getQuote(symbol: string): Promise<StockMarketData | undefined> {
-		this.getQuoteCalls.push(symbol);
-		if (this.error) {
-			throw this.error;
-		}
-		return this.quotesBySymbol.get(symbol);
+	async getQuote(): Promise<undefined> {
+		throw new Error('getQuote should not be called by AddStockToWatchlistService (TASK-030)');
 	}
 
 	async getQuotes(): Promise<MarketDataBatchResult> {
 		throw new Error('getQuotes should not be called by AddStockToWatchlistService');
+	}
+
+	async resolveSymbol(symbol: string): Promise<ResolvedMarketSymbol | undefined> {
+		this.resolveSymbolCalls.push(symbol);
+		if (this.error) {
+			throw this.error;
+		}
+		return this.resolvableSymbols.get(symbol);
 	}
 }
 
@@ -59,14 +63,12 @@ describe('AddStockToWatchlistService.addStock', () => {
 			new Map([['user-1', watchlistDocument('wl-1', [])]])
 		);
 		const watchlistService = new WatchlistService(watchlistRepository);
-		const marketDataProvider = new FakeMarketDataProvider(
-			new Map([['AAPL', { symbol: 'AAPL', name: 'Apple Inc.' }]])
-		);
+		const marketDataProvider = new FakeMarketDataProvider(new Map([['AAPL', { symbol: 'AAPL' }]]));
 		const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
 
 		const result = await service.addStock('user-1', 'wl-1', 'AAPL');
 
-		expect(marketDataProvider.getQuoteCalls).toEqual(['AAPL']);
+		expect(marketDataProvider.resolveSymbolCalls).toEqual(['AAPL']);
 		expect(result.watchlists[0].symbols).toEqual(['AAPL']);
 		expect(watchlistRepository.saveCalls).toHaveLength(1);
 	});
@@ -83,7 +85,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 
 		const result = await service.addStock('user-1', 'wl-1', '  GAW.L  ');
 
-		expect(marketDataProvider.getQuoteCalls).toEqual(['GAW.L']);
+		expect(marketDataProvider.resolveSymbolCalls).toEqual(['GAW.L']);
 		expect(result.watchlists[0].symbols).toEqual(['GAW.L']);
 	});
 
@@ -112,7 +114,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 			const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
 
 			await expect(service.addStock('user-1', 'wl-1', symbol)).rejects.toThrow(InvalidSymbolError);
-			expect(marketDataProvider.getQuoteCalls).toHaveLength(0);
+			expect(marketDataProvider.resolveSymbolCalls).toHaveLength(0);
 			expect(watchlistRepository.saveCalls).toHaveLength(0);
 		}
 	);
@@ -160,7 +162,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 		const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
 
 		await expect(service.addStock('user-1', 'wl-1', 'AAPL')).rejects.toThrow(DuplicateSymbolError);
-		expect(marketDataProvider.getQuoteCalls).toEqual(['AAPL']);
+		expect(marketDataProvider.resolveSymbolCalls).toEqual(['AAPL']);
 		expect(watchlistRepository.saveCalls).toHaveLength(0);
 	});
 
@@ -173,7 +175,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 		await expect(service.addStock('user-1', 'wl-missing', 'AAPL')).rejects.toThrow(
 			WatchlistNotFoundError
 		);
-		expect(marketDataProvider.getQuoteCalls).toEqual(['AAPL']);
+		expect(marketDataProvider.resolveSymbolCalls).toEqual(['AAPL']);
 		expect(watchlistRepository.saveCalls).toHaveLength(0);
 	});
 
@@ -217,7 +219,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 
 		const result = await service.addStock('user-1', 'wl-1', 'aapl');
 
-		expect(marketDataProvider.getQuoteCalls).toEqual(['AAPL']);
+		expect(marketDataProvider.resolveSymbolCalls).toEqual(['AAPL']);
 		expect(result.watchlists[0].symbols).toEqual(['AAPL']);
 	});
 
@@ -233,7 +235,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 
 		const result = await service.addStock('user-1', 'wl-1', 'sap.de');
 
-		expect(marketDataProvider.getQuoteCalls).toEqual(['SAP.DE']);
+		expect(marketDataProvider.resolveSymbolCalls).toEqual(['SAP.DE']);
 		expect(result.watchlists[0].symbols).toEqual(['SAP.DE']);
 	});
 
@@ -249,7 +251,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 
 		const result = await service.addStock('user-1', 'wl-1', 'hexa-b.st');
 
-		expect(marketDataProvider.getQuoteCalls).toEqual(['HEXA-B.ST']);
+		expect(marketDataProvider.resolveSymbolCalls).toEqual(['HEXA-B.ST']);
 		expect(result.watchlists[0].symbols).toEqual(['HEXA-B.ST']);
 	});
 
@@ -262,7 +264,7 @@ describe('AddStockToWatchlistService.addStock', () => {
 		const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
 
 		await expect(service.addStock('user-1', 'wl-1', 'aapl')).rejects.toThrow(DuplicateSymbolError);
-		expect(marketDataProvider.getQuoteCalls).toEqual(['AAPL']);
+		expect(marketDataProvider.resolveSymbolCalls).toEqual(['AAPL']);
 		expect(watchlistRepository.saveCalls).toHaveLength(0);
 	});
 
