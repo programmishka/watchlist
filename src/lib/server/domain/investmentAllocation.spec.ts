@@ -13,7 +13,7 @@ describe('calculateTargetPriceDistance', () => {
 		expect(calculateTargetPriceDistance(80, 100)).toBeCloseTo(-0.2);
 	});
 
-	it('is zero when price equals target', () => {
+	it('is a real zero when price exactly equals target', () => {
 		expect(calculateTargetPriceDistance(100, 100)).toBe(0);
 	});
 
@@ -21,24 +21,48 @@ describe('calculateTargetPriceDistance', () => {
 		expect(calculateTargetPriceDistance(120, 100)).toBeCloseTo(0.2);
 	});
 
-	it('is zero when the market price is missing', () => {
-		expect(calculateTargetPriceDistance(undefined, 100)).toBe(0);
+	it('is undefined when the market price is missing (primary regression case, TASK-031)', () => {
+		expect(calculateTargetPriceDistance(undefined, 1)).toBeUndefined();
 	});
 
-	it('is zero when the target price is missing', () => {
-		expect(calculateTargetPriceDistance(100, undefined)).toBe(0);
+	it('is undefined when the target price is missing', () => {
+		expect(calculateTargetPriceDistance(100, undefined)).toBeUndefined();
 	});
 
-	it('is zero when the market price is zero', () => {
-		expect(calculateTargetPriceDistance(0, 100)).toBe(0);
+	it('is undefined when the market price is zero', () => {
+		expect(calculateTargetPriceDistance(0, 100)).toBeUndefined();
 	});
 
-	it('is zero when the target price is zero', () => {
-		expect(calculateTargetPriceDistance(100, 0)).toBe(0);
+	it('is undefined when the target price is zero', () => {
+		expect(calculateTargetPriceDistance(100, 0)).toBeUndefined();
 	});
 
-	it('is zero rather than Infinity when the division overflows', () => {
-		expect(calculateTargetPriceDistance(Number.MAX_VALUE, Number.MIN_VALUE)).toBe(0);
+	it('is undefined when the market price is negative', () => {
+		expect(calculateTargetPriceDistance(-100, 100)).toBeUndefined();
+	});
+
+	it('is undefined when the target price is negative', () => {
+		expect(calculateTargetPriceDistance(100, -100)).toBeUndefined();
+	});
+
+	it.each([
+		['NaN', NaN],
+		['Infinity', Infinity],
+		['-Infinity', -Infinity]
+	])('is undefined when the market price is %s', (_label, price) => {
+		expect(calculateTargetPriceDistance(price, 100)).toBeUndefined();
+	});
+
+	it.each([
+		['NaN', NaN],
+		['Infinity', Infinity],
+		['-Infinity', -Infinity]
+	])('is undefined when the target price is %s', (_label, target) => {
+		expect(calculateTargetPriceDistance(100, target)).toBeUndefined();
+	});
+
+	it('is undefined rather than Infinity when the division overflows', () => {
+		expect(calculateTargetPriceDistance(Number.MAX_VALUE, Number.MIN_VALUE)).toBeUndefined();
 	});
 });
 

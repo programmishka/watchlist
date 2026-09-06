@@ -89,7 +89,7 @@ describe('toWatchlistViewResponse', () => {
 		});
 	});
 
-	it('omits missing optional fields from the serialized JSON', () => {
+	it('omits missing optional fields from the serialized JSON, while preserving a real zero distance', () => {
 		const view: WatchlistView = {
 			id: 'wl-1',
 			name: 'Main',
@@ -104,6 +104,20 @@ describe('toWatchlistViewResponse', () => {
 			distanceToTarget: 0,
 			dividendYield: 0
 		});
+	});
+
+	it('never serializes distanceToTarget as 0 for an unavailable distance (TASK-031 §30)', () => {
+		const view: WatchlistView = {
+			id: 'wl-1',
+			name: 'Main',
+			warnings: [],
+			stocks: [{ symbol: 'XYZ', targetPrice: 1, distanceToTarget: undefined, dividendYield: 0 }]
+		};
+
+		const serialized = JSON.parse(JSON.stringify(toWatchlistViewResponse(view)));
+
+		expect(serialized.stocks[0]).toEqual({ symbol: 'XYZ', targetPrice: 1, dividendYield: 0 });
+		expect('distanceToTarget' in serialized.stocks[0]).toBe(false);
 	});
 
 	it('maps the fx-provider-unavailable warning to a stable API code', () => {

@@ -1091,16 +1091,6 @@ distanceToTarget =
     regularMarketPrice / targetPrice - 1
 ```
 
-Equivalent TypeScript semantics from the legacy application:
-
-```ts
-if (!targetPrice || !regularMarketPrice || targetPrice === 0) {
-  return 0;
-}
-
-return regularMarketPrice / targetPrice - 1;
-```
-
 Examples:
 
 | Price | Target | Distance |
@@ -1110,6 +1100,20 @@ Examples:
 |   120 |    100 |     +20% |
 
 A negative distance means the current market price is below the target price.
+
+### 21.1 Distance Availability (TASK-031, superseding TASK-003's use of `0` as a missing-data sentinel)
+
+> Target Price distance is optional derived data. It exists only when both current market price and Target Price are valid positive finite values and the resulting calculation is finite.
+
+```ts
+type DistanceToTarget = number | undefined;
+```
+
+A numeric distance is produced only when `regularMarketPrice` and `targetPrice` are both present, finite, and strictly greater than zero, and the division itself produces a finite result. Missing, zero, negative, non-finite, or otherwise invalid inputs — or a non-finite result — produce `distanceToTarget = undefined`, never a fabricated `0`. This is a correctness fix for a production defect: a stock with no current market price previously composed a spurious, sometimes very large, `distanceToTarget` percentage; it must instead compose `undefined`, displayed as `—` (§30).
+
+> `distanceToTarget = 0` is a real calculated value meaning current market price equals Target Price. It is never used as a missing-data sentinel.
+
+Nullable semantics are established once, in the pure `calculateTargetPriceDistance` domain function, and survive unchanged through Watchlist composition, the REST response, the client model, and the UI — no layer along that path converts an unavailable distance back to `0` (§24.6, §26.4). The one deliberate exception is the pure `calculateInvestmentFactor` formula (§22.2), which — per established legacy semantics predating TASK-031 — treats both `0` and `undefined` as "does not participate," collapsing them to `factor = 0`; this does not reintroduce the ambiguity upstream, since `distanceToTarget` itself still distinguishes the two states everywhere else.
 
 ---
 
@@ -1160,7 +1164,7 @@ For every stock:
 factor = 1 / (1 + distanceToTarget)
 ```
 
-Following the existing semantics, a missing/falsy distance produces factor `0`.
+Following the existing semantics, a missing/falsy distance produces factor `0`. An unavailable Target Price distance (`undefined`, §21.1) results in investment factor `0` and therefore no savings allocation for that stock, without preventing other valid stocks from participating.
 
 Conceptually:
 
@@ -1173,6 +1177,8 @@ function calculateFactor(targetPriceDistance?: number) {
   return 1 / (1 + targetPriceDistance);
 }
 ```
+
+`!targetPriceDistance` is true both for a real zero distance and for an unavailable (`undefined`) distance, so both currently yield `factor = 0` — this is pre-existing, intentional legacy behavior (TASK-003/TASK-014), not a reintroduction of the `0`/unavailable ambiguity: `distanceToTarget` itself keeps the two states distinct everywhere upstream of this formula (§21.1), and this task does not change the formula.
 
 Mathematically invalid or non-finite factor results do not participate in
 the allocation and are treated as factor `0`.

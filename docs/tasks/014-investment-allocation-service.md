@@ -4,6 +4,12 @@
 
 Done
 
+> **Superseded in part by TASK-031:** TASK-031 preserves factor-`0`
+> allocation behavior for stocks with an unavailable Target Price distance,
+> while changing that distance's representation from `0` to `undefined`
+> upstream in `WatchlistQueryService`/`WatchlistStock`. This service's
+> factor/allocation formulas themselves were not changed.
+
 ## Goal
 
 Implement the server-side application use case for calculating a temporary investment allocation for all stocks in one Watchlist.

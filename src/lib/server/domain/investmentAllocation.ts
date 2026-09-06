@@ -25,18 +25,42 @@ function sanitizeFactor(factor: number): number {
 	return Number.isFinite(factor) && factor > 0 ? factor : 0;
 }
 
+/**
+ * A numeric distance is only meaningful when both inputs are present,
+ * finite, and strictly positive (TASK-031 §4). Missing/zero/negative/
+ * non-finite inputs, or a non-finite result, produce `undefined` rather than
+ * a fabricated `0` — `0` is reserved for a real calculated distance (current
+ * price exactly equals Target Price).
+ */
 export function calculateTargetPriceDistance(
 	regularMarketPrice: RegularMarketPrice,
 	targetPrice: TargetPrice
-): number {
-	if (!targetPrice || !regularMarketPrice || targetPrice === 0) {
-		return 0;
+): number | undefined {
+	if (
+		regularMarketPrice === undefined ||
+		targetPrice === undefined ||
+		!Number.isFinite(regularMarketPrice) ||
+		!Number.isFinite(targetPrice) ||
+		regularMarketPrice <= 0 ||
+		targetPrice <= 0
+	) {
+		return undefined;
 	}
 
 	const distance = regularMarketPrice / targetPrice - 1;
-	return Number.isFinite(distance) ? distance : 0;
+	return Number.isFinite(distance) ? distance : undefined;
 }
 
+/**
+ * A missing distance (cannot participate in allocation, TASK-031 §24) and a
+ * real zero distance (current price exactly equals Target Price) are
+ * distinct input states that happen to both yield factor `0` under this
+ * existing formula — `!targetPriceDistance` is true for both `undefined` and
+ * `0`. This is intentional legacy behavior for the zero case, preserved
+ * as-is; only the meaning of the missing case changed (TASK-031 supersedes
+ * TASK-003's use of `0` as a missing-data sentinel upstream of this
+ * function).
+ */
 export function calculateInvestmentFactor(targetPriceDistance: number | undefined): number {
 	if (!targetPriceDistance) {
 		return 0;

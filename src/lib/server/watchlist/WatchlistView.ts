@@ -10,7 +10,12 @@ export interface WatchlistStock {
 	/** The stock's raw market-data currency (e.g. "GBp"), not the FX-normalized code used internally for market-cap conversion. */
 	currency?: string;
 	targetPrice?: number;
-	distanceToTarget: number;
+	/**
+	 * Undefined when the distance cannot be calculated (missing/invalid price
+	 * or Target Price, TASK-031 §4) — never a fabricated `0`. A real `0` means
+	 * current price exactly equals Target Price.
+	 */
+	distanceToTarget?: number;
 	dividendYield: number;
 	marketCapBillionsUsd?: number;
 }

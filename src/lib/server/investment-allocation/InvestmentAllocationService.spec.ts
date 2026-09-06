@@ -21,7 +21,7 @@ class FakeWatchlistQueryService implements Pick<WatchlistQueryService, 'getWatch
 
 function stock(
 	symbol: string,
-	distanceToTarget: number,
+	distanceToTarget: number | undefined,
 	overrides: Partial<WatchlistStock> = {}
 ): WatchlistStock {
 	return { symbol, distanceToTarget, dividendYield: 0, ...overrides };
@@ -78,8 +78,8 @@ describe('InvestmentAllocationService.calculateAllocation — rounding', () => {
 	});
 });
 
-describe('InvestmentAllocationService.calculateAllocation — zero-distance and missing data', () => {
-	it('gives a zero-distance stock factor 0 and savings 0, per existing domain semantics', async () => {
+describe('InvestmentAllocationService.calculateAllocation — real zero and unavailable distance (TASK-031)', () => {
+	it('gives a real zero-distance stock factor 0 and savings 0, per existing domain semantics', async () => {
 		const queryService = fixedQueryService(view([stock('AAPL', 0), stock('SAP.DE', -0.5)]));
 		const service = new InvestmentAllocationService(queryService);
 
@@ -89,9 +89,8 @@ describe('InvestmentAllocationService.calculateAllocation — zero-distance and 
 		expect(result.allocations[1].savingsAmount).toBeGreaterThan(0);
 	});
 
-	it('treats missing-market-data distanceToTarget (0) the same as any other zero distance', async () => {
-		// WatchlistQueryService already collapses missing price/target-price into distanceToTarget = 0.
-		const queryService = fixedQueryService(view([stock('UNKNOWN', 0), stock('AAPL', 1)]));
+	it('gives an unavailable-distance stock factor 0 and savings 0, without preventing other stocks from participating', async () => {
+		const queryService = fixedQueryService(view([stock('UNKNOWN', undefined), stock('AAPL', 1)]));
 		const service = new InvestmentAllocationService(queryService);
 
 		const result = await service.calculateAllocation('user-1', 'wl-1', 100);
@@ -100,8 +99,22 @@ describe('InvestmentAllocationService.calculateAllocation — zero-distance and 
 		expect(result.allocations[1].savingsAmount).toBe(100);
 	});
 
+	it('proves real zero and unavailable distance are separate input states even though they currently yield the same factor', async () => {
+		const queryService = fixedQueryService(
+			view([stock('ZERO', 0), stock('UNAVAILABLE', undefined)])
+		);
+		const service = new InvestmentAllocationService(queryService);
+
+		const result = await service.calculateAllocation('user-1', 'wl-1', 100);
+
+		expect(result.allocations[0]).toEqual({ symbol: 'ZERO', factor: 0, savingsAmount: 0 });
+		expect(result.allocations[1]).toEqual({ symbol: 'UNAVAILABLE', factor: 0, savingsAmount: 0 });
+	});
+
 	it('produces invested 0 without NaN/Infinity when every stock has factor 0', async () => {
-		const queryService = fixedQueryService(view([stock('A', 0), stock('B', 0), stock('C', 0)]));
+		const queryService = fixedQueryService(
+			view([stock('A', 0), stock('B', undefined), stock('C', 0)])
+		);
 		const service = new InvestmentAllocationService(queryService);
 
 		const result = await service.calculateAllocation('user-1', 'wl-1', 1000);

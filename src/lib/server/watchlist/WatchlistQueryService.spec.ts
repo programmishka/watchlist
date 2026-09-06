@@ -243,7 +243,7 @@ describe('WatchlistQueryService.getWatchlist — Target Price composition', () =
 		expect(result.stocks[0].distanceToTarget).toBeCloseTo(-0.2);
 	});
 
-	it('leaves targetPrice undefined when none is stored, using existing distance semantics', async () => {
+	it('leaves targetPrice and distanceToTarget undefined when no Target Price is stored (TASK-031)', async () => {
 		const watchlistRepository = new FakeWatchlistRepository(
 			new Map([['user-1', watchlistDocument('wl-1', ['AAPL'])]])
 		);
@@ -260,7 +260,7 @@ describe('WatchlistQueryService.getWatchlist — Target Price composition', () =
 		const result = await service.getWatchlist('user-1', 'wl-1');
 
 		expect(result.stocks[0].targetPrice).toBeUndefined();
-		expect(result.stocks[0].distanceToTarget).toBe(0);
+		expect(result.stocks[0].distanceToTarget).toBeUndefined();
 	});
 
 	it("uses only the requested user's Target Prices", async () => {
@@ -296,7 +296,7 @@ describe('WatchlistQueryService.getWatchlist — Target Price composition', () =
 });
 
 describe('WatchlistQueryService.getWatchlist — market-data partial success', () => {
-	it('keeps all symbols, in order, when one has no market data', async () => {
+	it('keeps all symbols, in order, when one has no market data, without fabricating a distance (TASK-031 primary regression case)', async () => {
 		const watchlistRepository = new FakeWatchlistRepository(
 			new Map([['user-1', watchlistDocument('wl-1', ['AAPL', 'UNKNOWN', 'SAP.DE'])]])
 		);
@@ -327,7 +327,7 @@ describe('WatchlistQueryService.getWatchlist — market-data partial success', (
 		expect(unknown.name).toBeUndefined();
 		expect(unknown.marketCapBillionsUsd).toBeUndefined();
 		expect(unknown.dividendYield).toBe(0);
-		expect(unknown.distanceToTarget).toBe(0);
+		expect(unknown.distanceToTarget).toBeUndefined();
 		expect(result.stocks[0].price).toBe(100);
 		expect(result.stocks[2].price).toBe(200);
 	});
@@ -348,6 +348,89 @@ describe('WatchlistQueryService.getWatchlist — market-data partial success', (
 		);
 
 		await expect(service.getWatchlist('user-1', 'wl-1')).rejects.toThrow(MarketDataProviderError);
+	});
+});
+
+describe('WatchlistQueryService.getWatchlist — nullable distance composition (TASK-031)', () => {
+	it('composes distanceToTarget = undefined for missing price + valid Target Price, matching the production observation', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['XYZ'])]])
+		);
+		const targetPriceRepository = new FakeTargetPriceRepository(new Map([['user-1', { XYZ: 1 }]]));
+		const marketDataProvider = new FakeMarketDataProvider();
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			targetPriceRepository,
+			marketDataProvider,
+			new FakeExchangeRateProvider()
+		);
+
+		const result = await service.getWatchlist('user-1', 'wl-1');
+
+		expect(result.stocks).toHaveLength(1);
+		expect(result.stocks[0].price).toBeUndefined();
+		expect(result.stocks[0].targetPrice).toBe(1);
+		expect(result.stocks[0].distanceToTarget).toBeUndefined();
+	});
+
+	it('composes distanceToTarget = undefined for a valid price with no Target Price', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['AAPL'])]])
+		);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([['AAPL', { symbol: 'AAPL', price: 100 }]])
+		);
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			new FakeTargetPriceRepository(),
+			marketDataProvider,
+			new FakeExchangeRateProvider()
+		);
+
+		const result = await service.getWatchlist('user-1', 'wl-1');
+
+		expect(result.stocks[0].price).toBe(100);
+		expect(result.stocks[0].targetPrice).toBeUndefined();
+		expect(result.stocks[0].distanceToTarget).toBeUndefined();
+	});
+
+	it('composes a real distanceToTarget = 0 when price exactly equals Target Price', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['AAPL'])]])
+		);
+		const targetPriceRepository = new FakeTargetPriceRepository(
+			new Map([['user-1', { AAPL: 100 }]])
+		);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([['AAPL', { symbol: 'AAPL', price: 100 }]])
+		);
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			targetPriceRepository,
+			marketDataProvider,
+			new FakeExchangeRateProvider()
+		);
+
+		const result = await service.getWatchlist('user-1', 'wl-1');
+
+		expect(result.stocks[0].distanceToTarget).toBe(0);
+	});
+
+	it('keeps a stock with unavailable distance visible in the composed Watchlist (partial market data)', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['XYZ'])]])
+		);
+		const targetPriceRepository = new FakeTargetPriceRepository(new Map([['user-1', { XYZ: 1 }]]));
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			targetPriceRepository,
+			new FakeMarketDataProvider(),
+			new FakeExchangeRateProvider()
+		);
+
+		const result = await service.getWatchlist('user-1', 'wl-1');
+
+		expect(result.stocks.map((s) => s.symbol)).toEqual(['XYZ']);
 	});
 });
 

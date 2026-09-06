@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { AAPL_STOCK, GAW_L_STOCK, SAP_DE_STOCK } from './fixtures/stocks';
+import { AAPL_STOCK, GAW_L_STOCK, SAP_DE_STOCK, UNKNOWN_STOCK } from './fixtures/stocks';
 import {
 	mockAddStock,
 	mockCalculateInvestmentAllocation,
@@ -118,6 +118,30 @@ test.describe('Investment allocation', () => {
 		await expect(savingsCellFor(page, 'AAPL')).toHaveText('€0');
 		await expect(savingsCellFor(page, 'AAPL')).not.toHaveText('—');
 		await expect(page.getByText('Invested: €0')).toBeVisible();
+	});
+
+	test('gives factor/savings 0 for a stock with unavailable distance without preventing other stocks from participating (TASK-031)', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, [SAP_DE_STOCK, UNKNOWN_STOCK]);
+		await mockCalculateInvestmentAllocation(page, WATCHLIST_ID, () => ({
+			totalSavings: 500,
+			invested: 500,
+			allocations: [
+				{ symbol: 'SAP.DE', factor: 1, savingsAmount: 500 },
+				{ symbol: 'UNKNOWN', factor: 0, savingsAmount: 0 }
+			]
+		}));
+
+		await page.goto('/');
+		await page.getByLabel('Total savings').fill('500');
+		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
+
+		await expect(page.getByText('Invested: €500')).toBeVisible();
+		const unknownRow = page.getByRole('table').locator('tbody tr').filter({ hasText: 'UNKNOWN' });
+		await expect(unknownRow.getByRole('cell').nth(7)).toHaveText('—'); // distance to target still unavailable
+		await expect(savingsCellFor(page, 'UNKNOWN')).toHaveText('€0');
+		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('€500');
 	});
 
 	test('rejects invalid local input, sends no request, and preserves the previous allocation', async ({

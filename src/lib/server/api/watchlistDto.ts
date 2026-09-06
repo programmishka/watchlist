@@ -32,7 +32,8 @@ export interface WatchlistStockDto {
 	price?: number;
 	currency?: string;
 	targetPrice?: number;
-	distanceToTarget: number;
+	/** Omitted from serialized JSON when unavailable (TASK-031 §30); a real `0` is preserved (§31). */
+	distanceToTarget?: number;
 	dividendYield: number;
 	marketCapBillionsUsd?: number;
 }

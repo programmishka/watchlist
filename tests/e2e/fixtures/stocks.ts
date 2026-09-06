@@ -1,13 +1,13 @@
 import type { WatchlistStock } from '../../../src/lib/client/watchlistApi';
 
-/** USD stock with no Target Price set (TASK-018 §28). */
+/** USD stock with no Target Price set (TASK-018 §28); no Target Price means no calculable distance (TASK-031). */
 export const AAPL_STOCK: WatchlistStock = {
 	symbol: 'AAPL',
 	name: 'Apple Inc.',
 	price: 200,
 	currency: 'USD',
 	targetPrice: undefined,
-	distanceToTarget: 0,
+	distanceToTarget: undefined,
 	dividendYield: 0.005,
 	marketCapBillionsUsd: 3000
 };
@@ -36,7 +36,11 @@ export const GAW_L_STOCK: WatchlistStock = {
 	marketCapBillionsUsd: 5
 };
 
-/** Missing-market-data stock representing the TASK-011 partial-success placeholder behaviour. */
+/**
+ * Missing-market-data stock representing the TASK-011 partial-success
+ * placeholder behaviour. A missing price never produces a calculated
+ * distance (TASK-031) even though a Target Price is set.
+ */
 export const UNKNOWN_STOCK: WatchlistStock = {
 	symbol: 'UNKNOWN',
 	name: undefined,
@@ -44,6 +48,34 @@ export const UNKNOWN_STOCK: WatchlistStock = {
 	currency: undefined,
 	marketCapBillionsUsd: undefined,
 	targetPrice: 100,
-	distanceToTarget: 0,
+	distanceToTarget: undefined,
 	dividendYield: 0
+};
+
+/**
+ * Reproduces the exact TASK-031 production regression report: a missing
+ * market price with a Target Price of `1` must never produce a numeric
+ * Target Price distance.
+ */
+export const MISSING_PRICE_STOCK: WatchlistStock = {
+	symbol: 'NOPRICE',
+	name: 'No Price Inc.',
+	price: undefined,
+	currency: undefined,
+	marketCapBillionsUsd: undefined,
+	targetPrice: 1,
+	distanceToTarget: undefined,
+	dividendYield: 0
+};
+
+/** Current price exactly equals Target Price: a real calculated distance of 0 (TASK-031). */
+export const EQUAL_PRICE_TARGET_STOCK: WatchlistStock = {
+	symbol: 'EQUAL',
+	name: 'Equal Price Co.',
+	price: 100,
+	currency: 'USD',
+	targetPrice: 100,
+	distanceToTarget: 0,
+	dividendYield: 0,
+	marketCapBillionsUsd: 10
 };

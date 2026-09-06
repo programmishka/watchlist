@@ -4,6 +4,12 @@
 
 Done
 
+> **Superseded in part by TASK-031:** TASK-031 later changed missing/invalid
+> Target Price distance results from numeric `0` to unavailable/undefined.
+> Real calculated zero (current price exactly equals Target Price) remains
+> `0`. This file is kept as historical record and is not rewritten as though
+> nullable distance semantics had always existed.
+
 ## Goal
 
 Implement the first infrastructure-independent business logic of the Watchlist application.

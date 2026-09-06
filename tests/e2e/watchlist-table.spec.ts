@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { AAPL_STOCK, GAW_L_STOCK, SAP_DE_STOCK, UNKNOWN_STOCK } from './fixtures/stocks';
+import {
+	AAPL_STOCK,
+	EQUAL_PRICE_TARGET_STOCK,
+	GAW_L_STOCK,
+	MISSING_PRICE_STOCK,
+	SAP_DE_STOCK,
+	UNKNOWN_STOCK
+} from './fixtures/stocks';
 import { mockWatchlistView, mockWatchlistsMetadata } from './support/watchlistRoutes';
 import type { WatchlistStock } from '../../src/lib/client/watchlistApi';
 
@@ -74,10 +81,11 @@ test.describe('Watchlist table', () => {
 		await expect(cells.nth(3)).toHaveText('—'); // price
 		await expect(cells.nth(5)).toHaveText('—'); // currency
 		await expect(page.getByLabel('Target price for UNKNOWN')).toHaveValue('100'); // target price still present
+		await expect(cells.nth(7)).toHaveText('—'); // distance to target: unavailable, never a fabricated 0% (TASK-031)
 	});
 
 	test('presents dividend yield and target-price distance as percentages', async ({ page }) => {
-		await mockSingleWatchlist(page, [SAP_DE_STOCK, GAW_L_STOCK, UNKNOWN_STOCK]);
+		await mockSingleWatchlist(page, [SAP_DE_STOCK, GAW_L_STOCK]);
 		await page.goto('/');
 
 		const rows = page.getByRole('table').locator('tbody tr');
@@ -91,10 +99,32 @@ test.describe('Watchlist table', () => {
 		const gawDistanceCell = gawRow.getByRole('cell').nth(7);
 		await expect(gawDistanceCell).toContainText('%');
 		await expect(gawDistanceCell).toContainText('-');
+	});
 
-		const unknownRow = rows.filter({ hasText: 'UNKNOWN' });
-		const unknownDistanceCell = unknownRow.getByRole('cell').nth(7);
-		await expect(unknownDistanceCell).toContainText('%');
-		await expect(unknownDistanceCell).toContainText('0');
+	test('reports no numeric Target Price distance when the market price is unavailable (TASK-031 production regression)', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, [MISSING_PRICE_STOCK]);
+		await page.goto('/');
+
+		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'NOPRICE' });
+		const cells = row.getByRole('cell');
+		await expect(cells.nth(3)).toHaveText('—'); // price
+		await expect(page.getByLabel('Target price for NOPRICE')).toHaveValue('1');
+		const distanceCell = cells.nth(7);
+		await expect(distanceCell).toHaveText('—');
+		await expect(distanceCell).not.toContainText('%');
+	});
+
+	test('displays a real zero Target Price distance as 0%, not the missing-value placeholder', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, [EQUAL_PRICE_TARGET_STOCK]);
+		await page.goto('/');
+
+		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'EQUAL' });
+		const distanceCell = row.getByRole('cell').nth(7);
+		await expect(distanceCell).toHaveText('0%');
+		await expect(distanceCell).not.toHaveText('—');
 	});
 });
