@@ -11,6 +11,7 @@ import {
 	mockWatchlistView,
 	mockWatchlistsMetadata
 } from './support/watchlistRoutes';
+import { distanceValue, savingsValue, stockRows } from './support/stockLocators';
 import type { WatchlistStock } from '../../src/lib/client/watchlistApi';
 
 const WATCHLIST_ID = 'wl-1';
@@ -42,8 +43,7 @@ async function mockSingleWatchlist(
 }
 
 function savingsCellFor(page: Page, symbol: string) {
-	const row = page.getByRole('table').locator('tbody tr').filter({ hasText: symbol });
-	return row.getByRole('cell').nth(8);
+	return savingsValue(page, symbol);
 }
 
 test.describe('Investment allocation', () => {
@@ -54,7 +54,7 @@ test.describe('Investment allocation', () => {
 
 		await page.goto('/');
 
-		await expect(page.getByRole('columnheader', { name: 'Savings Amount' })).toBeVisible();
+		await expect(page.getByText('Savings Amount').first()).toBeVisible();
 		await expect(savingsCellFor(page, 'AAPL')).toHaveText('—');
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('—');
 		await expect(savingsCellFor(page, 'GAW.L')).toHaveText('—');
@@ -138,8 +138,7 @@ test.describe('Investment allocation', () => {
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
 
 		await expect(page.getByText('Allocated savings: €500')).toBeVisible();
-		const unknownRow = page.getByRole('table').locator('tbody tr').filter({ hasText: 'UNKNOWN' });
-		await expect(unknownRow.getByRole('cell').nth(7)).toHaveText('—'); // distance to target still unavailable
+		await expect(distanceValue(page, 'UNKNOWN')).toHaveText('—'); // distance to target still unavailable
 		await expect(savingsCellFor(page, 'UNKNOWN')).toHaveText('€0');
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('€500');
 	});
@@ -244,7 +243,7 @@ test.describe('Investment allocation', () => {
 
 		await page.goto('/');
 		await page.getByLabel('Filter by company name').fill('Apple');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
@@ -273,10 +272,10 @@ test.describe('Investment allocation', () => {
 
 		const filter = page.getByLabel('Filter by company name');
 		await filter.fill('Apple');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 
 		await filter.fill('');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(3);
+		await expect(stockRows(page)).toHaveCount(3);
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('€427');
 		await expect(savingsCellFor(page, 'GAW.L')).toHaveText('€250');
 		expect(allocationCalls.calls).toHaveLength(1);
@@ -284,7 +283,15 @@ test.describe('Investment allocation', () => {
 
 	test('keeps Savings Amount attached to its symbol after sorting, with no new POST', async ({
 		page
-	}) => {
+	}, testInfo) => {
+		// Drives the Table's sortable column header, which only exists in
+		// Table presentation (TASK-036 §45-53); Card mode's own sort control
+		// is covered by stock-cards.spec.ts.
+		test.skip(
+			testInfo.project.name !== 'chromium-desktop',
+			'desktop-only: exercises the Table presentation'
+		);
+
 		await mockSingleWatchlist(page);
 		const allocationCalls = await mockCalculateInvestmentAllocation(
 			page,
@@ -652,9 +659,10 @@ test.describe('Investment allocation', () => {
 
 		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
-		const savingsHeader = page.getByRole('columnheader', { name: 'Savings Amount' });
-		await savingsHeader.scrollIntoViewIfNeeded();
-		await expect(savingsHeader).toBeVisible();
+		const savingsLabel = page.getByText('Savings Amount').first();
+		await savingsLabel.scrollIntoViewIfNeeded();
+		await expect(savingsLabel).toBeVisible();
+		await expect(savingsCellFor(page, 'AAPL')).toHaveText('€320');
 
 		const overflows = await page.evaluate(
 			() => document.documentElement.scrollWidth > document.documentElement.clientWidth

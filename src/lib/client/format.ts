@@ -63,6 +63,26 @@ export function formatSignedPercentage(value: number | undefined, locale?: strin
 }
 
 /**
+ * Combines Price and Currency into one display value for Card presentation
+ * (TASK-036 §18-19): e.g. `319.97 USD`. A missing/non-finite price renders as
+ * the plain missing-value placeholder rather than a misleading
+ * currency-only value (e.g. `— USD`); a present price with no currency
+ * renders the number alone. Contains no business formula and reuses
+ * `formatNumber` rather than duplicating its rounding/placeholder rules.
+ */
+export function formatPriceWithCurrency(
+	price: number | undefined,
+	currency: string | undefined,
+	locale?: string
+): string {
+	if (isMissing(price)) {
+		return MISSING_VALUE_PLACEHOLDER;
+	}
+	const formattedPrice = formatNumber(price, locale);
+	return currency ? `${formattedPrice} ${currency}` : formattedPrice;
+}
+
+/**
  * Locale-aware whole-Euro formatting (TASK-024 §16-17). `value` must already
  * be the fully computed whole-Euro amount to display; a calculated `0` is a
  * real value and is formatted normally, distinct from the missing-value

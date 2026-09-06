@@ -5,6 +5,7 @@ import {
 	mockWatchlistsMetadata,
 	mockWatchlistView
 } from './support/watchlistRoutes';
+import { distanceValue } from './support/stockLocators';
 import type { WatchlistStock } from '../../src/lib/client/watchlistApi';
 
 const WATCHLIST_ID = 'wl-1';
@@ -57,8 +58,7 @@ test.describe('Target Price editing', () => {
 
 		await expect(input).toHaveValue('200.5');
 		expect(putCalls.calls).toEqual([{ symbol: 'SAP.DE', targetPrice: 200.5 }]);
-		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'SAP.DE' });
-		await expect(row.getByRole('cell').nth(7)).toContainText('%');
+		await expect(distanceValue(page, 'SAP.DE')).toContainText('%');
 	});
 
 	test('commits a comma-decimal value as the equivalent numeric JSON body', async ({ page }) => {
@@ -178,8 +178,7 @@ test.describe('Target Price editing', () => {
 
 		await expect(page.getByRole('alert')).toContainText('The target price must be greater than 0.');
 		await expect(input).toHaveValue('999');
-		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'SAP.DE' });
-		const distanceCell = row.getByRole('cell').nth(7);
+		const distanceCell = distanceValue(page, 'SAP.DE');
 		await expect(distanceCell).toContainText('%');
 		await expect(distanceCell).not.toHaveText('—');
 	});
@@ -201,13 +200,11 @@ test.describe('Target Price editing', () => {
 		await input.blur();
 
 		await expect(input).toHaveValue('250');
-		const aaplRow = page.getByRole('table').locator('tbody tr').filter({ hasText: 'AAPL' });
-		await expect(aaplRow.getByRole('cell').nth(7)).toContainText('-10.00%');
+		await expect(distanceValue(page, 'AAPL')).toContainText('-10.00%');
 
 		// Row isolation: the other row is untouched.
 		await expect(page.getByLabel('Target price for SAP.DE')).toHaveValue('150');
-		const sapRow = page.getByRole('table').locator('tbody tr').filter({ hasText: 'SAP.DE' });
-		const sapDistanceCell = sapRow.getByRole('cell').nth(7);
+		const sapDistanceCell = distanceValue(page, 'SAP.DE');
 		await expect(sapDistanceCell).toContainText('%');
 		await expect(sapDistanceCell).not.toHaveText('—');
 	});
@@ -233,8 +230,7 @@ test.describe('Target Price editing', () => {
 		await input.blur();
 
 		await expect(input).toHaveValue('250');
-		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'SAP.DE' });
-		await expect(row.getByRole('cell').nth(7)).toHaveText('—');
+		await expect(distanceValue(page, 'SAP.DE')).toHaveText('—');
 		await expect(page.getByText('Current market data is temporarily unavailable.')).toBeVisible();
 		await expect(page.getByText('Failed to save target price')).toHaveCount(0);
 	});

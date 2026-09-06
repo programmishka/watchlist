@@ -8,6 +8,8 @@
 		MISSING_VALUE_PLACEHOLDER
 	} from '$lib/client/format';
 	import type { WatchlistSort, WatchlistSortColumn } from '$lib/client/watchlistSort';
+	import { distanceStateFor } from '$lib/client/distancePresentation';
+	import { SORTABLE_STOCK_COLUMNS } from '$lib/client/sortableStockColumns';
 	import TargetPriceCell, {
 		type TargetPriceSaveResult
 	} from '$lib/components/TargetPriceCell.svelte';
@@ -32,42 +34,11 @@
 		onSaveTargetPrice
 	}: Props = $props();
 
-	// Column order/labels (TASK-033 §1-9): Currency moved to directly follow
-	// Price, and Market Cap/Dividend Yield/Actions were renamed for clarity.
-	// Presentation only — this never reorders the underlying stock data.
-	const SORTABLE_COLUMNS: { key: WatchlistSortColumn; label: string; numeric: boolean }[] = [
-		{ key: 'symbol', label: 'Symbol', numeric: false },
-		{ key: 'name', label: 'Name', numeric: false },
-		{ key: 'marketCapBillionsUsd', label: 'Market Cap (USD bn)', numeric: true },
-		{ key: 'price', label: 'Price', numeric: true },
-		{ key: 'currency', label: 'Currency', numeric: false },
-		{ key: 'dividendYield', label: 'Dividend Yield', numeric: true },
-		{ key: 'targetPrice', label: 'Target Price', numeric: true },
-		{ key: 'distanceToTarget', label: 'Distance to Target', numeric: true }
-	];
-
 	function ariaSortFor(column: WatchlistSortColumn): 'ascending' | 'descending' | 'none' {
 		if (sort?.column !== column) {
 			return 'none';
 		}
 		return sort.direction === 'asc' ? 'ascending' : 'descending';
-	}
-
-	/**
-	 * Value-oriented Distance-to-Target classification (TASK-033 §28-33): a
-	 * negative distance means the market price is below Target Price, which
-	 * is presentationally favorable; positive is unfavorable. This is
-	 * deliberately not named after mathematical sign to avoid ambiguity.
-	 * Zero and missing distances are both neutral, but for distinct reasons
-	 * (a real equal-price result vs. no calculable value at all).
-	 */
-	function distanceStateFor(
-		distanceToTarget: number | undefined
-	): 'favorable' | 'unfavorable' | 'neutral' {
-		if (distanceToTarget === undefined || distanceToTarget === 0) {
-			return 'neutral';
-		}
-		return distanceToTarget < 0 ? 'favorable' : 'unfavorable';
 	}
 </script>
 
@@ -87,7 +58,7 @@
 		</colgroup>
 		<thead>
 			<tr>
-				{#each SORTABLE_COLUMNS as column (column.key)}
+				{#each SORTABLE_STOCK_COLUMNS as column (column.key)}
 					<th
 						scope="col"
 						class={column.numeric ? 'numeric' : undefined}
@@ -115,7 +86,7 @@
 		<tbody>
 			{#each stocks as stock (stock.symbol)}
 				{@const distanceState = distanceStateFor(stock.distanceToTarget)}
-				<tr>
+				<tr class="stock-row">
 					<td class="symbol">{stock.symbol}</td>
 					<td class="name">{stock.name ?? MISSING_VALUE_PLACEHOLDER}</td>
 					<td class="numeric">{formatNumber(stock.marketCapBillionsUsd)}</td>
@@ -130,10 +101,10 @@
 							onSave={onSaveTargetPrice}
 						/>
 					</td>
-					<td class="numeric distance-{distanceState}">
+					<td class="numeric distance-value distance-{distanceState}">
 						{formatSignedPercentage(stock.distanceToTarget)}
 					</td>
-					<td class="numeric">
+					<td class="numeric savings-value">
 						{formatWholeEuro(allocationBySymbol?.get(stock.symbol)?.savingsAmount)}
 					</td>
 					<td class="actions">

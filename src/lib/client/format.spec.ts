@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	formatNumber,
 	formatPercentage,
+	formatPriceWithCurrency,
 	formatSignedPercentage,
 	formatWholeEuro,
 	MISSING_VALUE_PLACEHOLDER
@@ -71,6 +72,24 @@ describe('formatSignedPercentage', () => {
 
 	it('formats a missing value as the placeholder', () => {
 		expect(formatSignedPercentage(undefined, LOCALE)).toBe(MISSING_VALUE_PLACEHOLDER);
+	});
+});
+
+describe('formatPriceWithCurrency', () => {
+	it('combines a representative price and currency into one value', () => {
+		expect(formatPriceWithCurrency(319.97, 'USD', LOCALE)).toBe('319.97 USD');
+	});
+
+	it('renders the price alone when currency is missing', () => {
+		expect(formatPriceWithCurrency(319.97, undefined, LOCALE)).toBe('319.97');
+	});
+
+	it('renders the placeholder alone for a missing price, never a currency-only value', () => {
+		expect(formatPriceWithCurrency(undefined, 'USD', LOCALE)).toBe(MISSING_VALUE_PLACEHOLDER);
+	});
+
+	it('renders the placeholder for a non-finite price', () => {
+		expect(formatPriceWithCurrency(NaN, 'USD', LOCALE)).toBe(MISSING_VALUE_PLACEHOLDER);
 	});
 });
 

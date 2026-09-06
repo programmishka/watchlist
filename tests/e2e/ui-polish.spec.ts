@@ -6,6 +6,7 @@ import {
 	mockWatchlistView,
 	mockWatchlistsMetadata
 } from './support/watchlistRoutes';
+import { distanceValue, savingsValue, stockRows } from './support/stockLocators';
 
 /**
  * TASK-025 §45: cross-feature UI-state regression coverage that does not
@@ -91,19 +92,16 @@ test.describe('UI polish: complete populated page', () => {
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
 		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
-		// Table content: positive distance, negative distance, and a
+		// Stock content: positive distance, negative distance, and a
 		// calculated (non-placeholder) savings amount coexist with a
 		// pre-calculation placeholder for a stock the allocation omitted.
-		const rows = page.getByRole('table').locator('tbody tr');
-		await expect(rows).toHaveCount(4);
+		await expect(stockRows(page)).toHaveCount(4);
 
-		const sapRow = rows.filter({ hasText: 'SAP.DE' });
-		await expect(sapRow.getByRole('cell').nth(7)).toContainText('%');
-		await expect(sapRow.getByRole('cell').nth(7)).not.toContainText('-');
-		await expect(sapRow.getByRole('cell').nth(8)).toContainText('550');
+		await expect(distanceValue(page, 'SAP.DE')).toContainText('%');
+		await expect(distanceValue(page, 'SAP.DE')).not.toContainText('-');
+		await expect(savingsValue(page, 'SAP.DE')).toContainText('550');
 
-		const gawRow = rows.filter({ hasText: 'GAW.L' });
-		await expect(gawRow.getByRole('cell').nth(7)).toContainText('-');
+		await expect(distanceValue(page, 'GAW.L')).toContainText('-');
 
 		// Stock counts.
 		await expect(page.getByText('4 stocks')).toBeVisible();
@@ -267,7 +265,7 @@ test.describe('UI polish: keyboard smoke flow', () => {
 });
 
 test.describe('UI polish: viewport regression', () => {
-	test('375px complete page has no page-level overflow while the table scrolls', async ({
+	test('375px complete page uses Card presentation with no page-level overflow', async ({
 		page
 	}, testInfo) => {
 		test.skip(testInfo.project.name !== 'chromium-mobile', 'mobile-only assertion');
@@ -278,18 +276,15 @@ test.describe('UI polish: viewport regression', () => {
 		await expect(page.getByRole('tablist')).toBeVisible();
 		await expect(page.getByLabel('Stock symbol')).toBeVisible();
 		await expect(page.getByLabel('Total savings')).toBeVisible();
-		await expect(page.getByRole('table')).toBeVisible();
+		// Below the Table/Card breakpoint (TASK-036 §5-7), Cards replace the
+		// table rather than requiring horizontal table scrolling (§62, §131).
+		await expect(page.getByRole('table')).toHaveCount(0);
+		await expect(stockRows(page)).toHaveCount(4);
 
 		expect(await pageOverflowsHorizontally(page)).toBe(false);
-
-		const { scrollWidth, clientWidth } = await page.evaluate(() => {
-			const container = document.querySelector('table')?.parentElement;
-			return { scrollWidth: container?.scrollWidth ?? 0, clientWidth: container?.clientWidth ?? 0 };
-		});
-		expect(scrollWidth).toBeGreaterThan(clientWidth);
 	});
 
-	test('768px complete page shows all controls without page-level overflow', async ({
+	test('768px complete page uses Card presentation without page-level overflow', async ({
 		page
 	}, testInfo) => {
 		test.skip(testInfo.project.name !== 'chromium-desktop', 'run once, not per-project');
@@ -304,7 +299,10 @@ test.describe('UI polish: viewport regression', () => {
 		await expect(page.getByLabel('Stock symbol')).toBeVisible();
 		await expect(page.getByLabel('Filter by company name')).toBeVisible();
 		await expect(page.getByLabel('Total savings')).toBeVisible();
-		await expect(page.getByRole('table')).toBeVisible();
+		// 768px is below the empirically selected 1120px breakpoint (TASK-036
+		// §5-7): Cards, not the table, are the comfortable presentation here.
+		await expect(page.getByRole('table')).toHaveCount(0);
+		await expect(stockRows(page)).toHaveCount(4);
 
 		expect(await pageOverflowsHorizontally(page)).toBe(false);
 	});

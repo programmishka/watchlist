@@ -17,6 +17,16 @@ Done
 > `.btn`/`.field-input`/status/empty-state vocabulary) remain unchanged and
 > are reused by TASK-034 rather than replaced.
 
+> **Mobile strategy superseded by TASK-036.** This task's 375px viewport
+> strategy assumed the table itself, horizontally scrollable, remained the
+> mobile presentation. TASK-036 replaces that assumption for normal
+> tablet/mobile stock presentation: below an empirically selected breakpoint,
+> Stock Cards render instead of a horizontally scrolling table. This task's
+> other conventions (CSS custom properties, shared button/input/status
+> vocabulary, empty-state presentation) are unaffected and remain reused by
+> both the table and the new Cards. See TASK-036 and `ARCHITECTURE.md`
+> §14.6/§26.13.
+
 ## Goal
 
 Perform the final V1 UI quality pass over the complete Watchlist application.

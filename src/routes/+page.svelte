@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
 	import WatchlistTabs from '$lib/components/WatchlistTabs.svelte';
 	import WatchlistTable from '$lib/components/WatchlistTable.svelte';
+	import WatchlistCards from '$lib/components/WatchlistCards.svelte';
+	import {
+		STOCK_CARD_PRESENTATION_BREAKPOINT_PX,
+		stockPresentationModeForWidth
+	} from '$lib/client/watchlistPresentation';
 	import type {
 		InvestmentAllocationResponse,
 		WatchlistApiError,
@@ -72,6 +78,40 @@
 	// newly active Watchlist (TASK-032); reset to that default at the same
 	// active-Watchlist transitions as the filter, never persisted anywhere.
 	let sort = $state<WatchlistSort>(DEFAULT_WATCHLIST_SORT);
+
+	// Responsive Table/Card presentation switch (TASK-036 §54-61): a pure
+	// width->mode mapping evaluated against the real viewport, guarded so it
+	// never touches `window` during SSR (defaulting to the table, matching
+	// the pre-TASK-036 behavior). Unlike WatchlistTabs' capacity computation,
+	// this can't be left to CSS alone: the table and cards each mount their
+	// own per-stock TargetPriceCell/remove-button instances, so both being
+	// simultaneously present (even one hidden via CSS) would leave duplicate
+	// interactive controls in the accessibility tree (§59). Using a single
+	// `{#if}` below ensures only one presentation is ever mounted. Resizing
+	// only recomputes this local presentation state; it never issues a
+	// Watchlist/stock/Target-Price/allocation request.
+	function currentPresentationMode(): 'table' | 'cards' {
+		if (!browser) {
+			return 'table';
+		}
+		return stockPresentationModeForWidth(window.innerWidth);
+	}
+
+	let presentationMode = $state(currentPresentationMode());
+
+	$effect(() => {
+		if (!browser) {
+			return;
+		}
+		const query = window.matchMedia(`(min-width: ${STOCK_CARD_PRESENTATION_BREAKPOINT_PX}px)`);
+		const update = () => {
+			presentationMode = currentPresentationMode();
+		};
+		query.addEventListener('change', update);
+		return () => {
+			query.removeEventListener('change', update);
+		};
+	});
 
 	// Total Savings input text and the most recent successful investment
 	// allocation (TASK-024 §12/§50): a temporary, unpersisted UI-state result
@@ -586,8 +626,18 @@
 					<p class="status empty-state">This watchlist is empty.</p>
 				{:else if filteredStocks.length === 0}
 					<p class="status filtered-empty">No stocks match the current filter.</p>
-				{:else}
+				{:else if presentationMode === 'table'}
 					<WatchlistTable
+						stocks={visibleStocks}
+						{sort}
+						busy={managementBusy}
+						{allocationBySymbol}
+						onSort={handleSort}
+						onRemove={handleRemoveStock}
+						onSaveTargetPrice={handleSaveTargetPrice}
+					/>
+				{:else}
+					<WatchlistCards
 						stocks={visibleStocks}
 						{sort}
 						busy={managementBusy}

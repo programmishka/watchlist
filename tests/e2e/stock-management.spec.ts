@@ -6,6 +6,7 @@ import {
 	mockWatchlistView,
 	mockWatchlistsMetadata
 } from './support/watchlistRoutes';
+import { stockRows } from './support/stockLocators';
 
 const WATCHLIST_ID = 'wl-1';
 
@@ -122,7 +123,7 @@ test.describe('Stock management', () => {
 
 		await expect(page.getByRole('alert')).toContainText('The symbol already exists.');
 		await expect(input).toHaveValue('SAP.DE');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
+		await expect(stockRows(page)).toHaveCount(2);
 	});
 
 	test('displays the stable error and preserves state when the provider is unavailable', async ({
@@ -143,7 +144,7 @@ test.describe('Stock management', () => {
 
 		await expect(page.getByRole('alert')).toContainText('Market data is currently unavailable.');
 		await expect(input).toHaveValue('AAPL');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
+		await expect(stockRows(page)).toHaveCount(2);
 	});
 
 	test('a successful add with a warning still adds the row', async ({ page }) => {
@@ -262,7 +263,7 @@ test.describe('Stock management', () => {
 		await page.getByRole('button', { name: 'Remove AAPL' }).click();
 
 		await expect(page.getByText('This watchlist is empty.')).toBeVisible();
-		await expect(page.getByRole('table')).toHaveCount(0);
+		await expect(stockRows(page)).toHaveCount(0);
 	});
 
 	test('no add-stock form or stock table is shown when there are no watchlists', async ({
@@ -274,7 +275,7 @@ test.describe('Stock management', () => {
 
 		await expect(page.getByText('No watchlist has been created yet.')).toBeVisible();
 		await expect(page.getByLabel('Stock symbol')).toHaveCount(0);
-		await expect(page.getByRole('table')).toHaveCount(0);
+		await expect(stockRows(page)).toHaveCount(0);
 	});
 
 	test('normalizes lowercase input to uppercase as it is typed and submits the uppercase symbol', async ({
@@ -481,7 +482,7 @@ test.describe('Stock management', () => {
 		await expect(page.getByRole('alert')).toContainText('The symbol already exists.');
 	});
 
-	test('mobile layout keeps the add-stock form usable and the delete column reachable', async ({
+	test('mobile layout keeps the add-stock form usable and the remove action reachable via Cards', async ({
 		page
 	}, testInfo) => {
 		test.skip(testInfo.project.name !== 'chromium-mobile', 'mobile-only assertion');
@@ -492,7 +493,10 @@ test.describe('Stock management', () => {
 
 		await expect(page.getByLabel('Stock symbol')).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Add stock' })).toBeVisible();
-		await expect(page.getByRole('table')).toBeVisible();
+		// Below the Table/Card breakpoint (TASK-036 §5-7), Cards replace the
+		// table rather than requiring horizontal table scrolling (§62, §131).
+		await expect(page.getByRole('table')).toHaveCount(0);
+		await expect(stockRows(page)).toHaveCount(2);
 		await expect(page.getByRole('button', { name: 'Remove SAP.DE' })).toBeAttached();
 
 		const input = page.getByLabel('Stock symbol');
@@ -501,12 +505,6 @@ test.describe('Stock management', () => {
 		await input.fill('AAPL!');
 		await page.getByRole('button', { name: 'Add stock' }).click();
 		await expect(page.getByRole('alert')).toContainText('Use letters, numbers, dots, or hyphens.');
-
-		const { scrollWidth, clientWidth } = await page.evaluate(() => {
-			const container = document.querySelector('table')?.parentElement;
-			return { scrollWidth: container?.scrollWidth ?? 0, clientWidth: container?.clientWidth ?? 0 };
-		});
-		expect(scrollWidth).toBeGreaterThan(clientWidth);
 
 		const overflows = await page.evaluate(
 			() => document.documentElement.scrollWidth > document.documentElement.clientWidth

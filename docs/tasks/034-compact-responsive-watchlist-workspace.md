@@ -8,6 +8,10 @@ Done
 
 TASK-035 replaces this task's horizontally scrollable many-tab strategy with active-visible responsive overflow navigation, and corrects the compact active-tab delete button's `×` alignment introduced here. The consolidated toolbar, wider desktop page, content-aware table column widths, and other layout work described below are otherwise unchanged. See `ARCHITECTURE.md` §14.5 and §26.12.
 
+## Historical Note (TASK-036)
+
+TASK-036 completes the responsive stock-presentation evolution this task started: wide viewports keep the table established/refined here, while constrained viewports now use Stock Cards instead of the table's horizontal-scroll fallback. The content-aware table column widths, wider desktop page, and consolidated toolbar described below are unchanged and remain in effect for the table's own wide-viewport presentation. See `ARCHITECTURE.md` §14.6 and §26.13.
+
 ## Goal
 
 Redesign the existing Watchlist workspace layout to use screen space more efficiently and give the stock table clear visual priority.

@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { AAPL_STOCK, GAW_L_STOCK, SAP_DE_STOCK, UNKNOWN_STOCK } from './fixtures/stocks';
 import { mockWatchlistView, mockWatchlistsMetadata } from './support/watchlistRoutes';
+import { distanceValue, stockRows } from './support/stockLocators';
+import { STOCK_CARD_PRESENTATION_BREAKPOINT_PX } from '../../src/lib/client/watchlistPresentation';
 
 const WATCHLIST_ID = 'wl-1';
 const STOCKS = [SAP_DE_STOCK, AAPL_STOCK, GAW_L_STOCK, UNKNOWN_STOCK];
@@ -50,7 +52,7 @@ test.describe('Responsive layout', () => {
 		expect(await pageOverflowsHorizontally(page)).toBe(false);
 	});
 
-	test('mobile viewport does not cause page-level horizontal overflow', async ({
+	test('mobile viewport uses Card presentation with no page-level horizontal overflow', async ({
 		page
 	}, testInfo) => {
 		test.skip(testInfo.project.name !== 'chromium-mobile', 'mobile-only assertion');
@@ -67,21 +69,24 @@ test.describe('Responsive layout', () => {
 		});
 
 		await page.goto('/');
-		await expect(page.getByRole('table')).toBeVisible();
+		// Below the Table/Card breakpoint (TASK-036 §5-7), Stock Cards are the
+		// interactively present presentation; the table is not present at all.
+		await expect(page.getByRole('table')).toHaveCount(0);
+		await expect(stockRows(page)).toHaveCount(4);
 
 		expect(await pageOverflowsHorizontally(page)).toBe(false);
 
 		// Distance-to-Target highlighting and the count footer remain visible
-		// and reachable on mobile (TASK-033 §85), not just on desktop.
-		const sapRow = page.getByRole('table').locator('tbody tr').filter({ hasText: 'SAP.DE' });
-		const distanceCell = sapRow.getByRole('cell').nth(7);
+		// and reachable in Card mode (TASK-033 §85, TASK-036 §23-26), not just
+		// on desktop.
+		const distanceCell = distanceValue(page, 'SAP.DE');
 		await distanceCell.scrollIntoViewIfNeeded();
 		await expect(distanceCell).toBeVisible();
 		await expect(distanceCell).toHaveClass(/distance-unfavorable/);
 		await expect(page.getByText('Total: 4 stocks')).toBeVisible();
 	});
 
-	test('mobile viewport makes the table container horizontally scrollable', async ({
+	test('mobile viewport never scrolls the stock presentation horizontally (Cards flow vertically)', async ({
 		page
 	}, testInfo) => {
 		test.skip(testInfo.project.name !== 'chromium-mobile', 'mobile-only assertion');
@@ -98,13 +103,43 @@ test.describe('Responsive layout', () => {
 		});
 
 		await page.goto('/');
-		await expect(page.getByRole('table')).toBeVisible();
+		await expect(stockRows(page)).toHaveCount(4);
 
+		// Card mode replaces horizontal table scrolling entirely (§62, §131):
+		// no scroll container anywhere in the stock presentation may overflow.
 		const { scrollWidth, clientWidth } = await page.evaluate(() => {
-			const container = document.querySelector('table')?.parentElement;
-			return { scrollWidth: container?.scrollWidth ?? 0, clientWidth: container?.clientWidth ?? 0 };
+			const grid = document.querySelector('.cards-grid');
+			return { scrollWidth: grid?.scrollWidth ?? 0, clientWidth: grid?.clientWidth ?? 0 };
 		});
-		expect(scrollWidth).toBeGreaterThan(clientWidth);
+		expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+	});
+
+	test('presentation breakpoint boundary: exactly one presentation is active immediately below and above 1120px', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'chromium-desktop', 'run once, not per-project');
+
+		await mockWatchlistsMetadata(page, {
+			activeWatchlistId: WATCHLIST_ID,
+			watchlists: [{ id: WATCHLIST_ID, name: 'Main' }]
+		});
+		await mockWatchlistView(page, WATCHLIST_ID, {
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: STOCKS,
+			warnings: []
+		});
+
+		await page.setViewportSize({ width: STOCK_CARD_PRESENTATION_BREAKPOINT_PX - 1, height: 900 });
+		await page.goto('/');
+		await expect(stockRows(page)).toHaveCount(4);
+		await expect(page.getByRole('table')).toHaveCount(0);
+		expect(await pageOverflowsHorizontally(page)).toBe(false);
+
+		await page.setViewportSize({ width: STOCK_CARD_PRESENTATION_BREAKPOINT_PX, height: 900 });
+		await expect(page.getByRole('table')).toBeVisible();
+		await expect(page.locator('.stock-card')).toHaveCount(0);
+		expect(await pageOverflowsHorizontally(page)).toBe(false);
 	});
 
 	test('mobile navigation shows only the active watchlist directly, others via disclosure', async ({

@@ -38,6 +38,18 @@ async function mockSingleWatchlist(page: Page, stocks: WatchlistStock[]): Promis
 }
 
 test.describe('Watchlist table', () => {
+	// This spec exercises the desktop Table presentation specifically
+	// (columns, cell indices, `aria-sort`). Below the Table/Card breakpoint
+	// (TASK-036 §5-7) Stock Cards render instead; equivalent Card-mode
+	// coverage lives in stock-cards.spec.ts.
+	// eslint-disable-next-line no-empty-pattern -- Playwright requires the object-destructuring form even with no fixtures used
+	test.beforeEach(({}, testInfo) => {
+		test.skip(
+			testInfo.project.name !== 'chromium-desktop',
+			'desktop-only: exercises the Table presentation'
+		);
+	});
+
 	test('renders exactly the expected columns in order', async ({ page }) => {
 		await mockSingleWatchlist(page, [AAPL_STOCK]);
 		await page.goto('/');

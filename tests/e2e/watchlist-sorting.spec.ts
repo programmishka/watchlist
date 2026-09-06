@@ -107,6 +107,19 @@ async function symbolColumn(page: Page): Promise<string[]> {
 }
 
 test.describe('Watchlist table sorting', () => {
+	// Sorting interactions here go through the desktop Table's sortable
+	// column headers, which only exist in Table presentation (TASK-036
+	// §45-53). Below the Table/Card breakpoint, Card mode exposes an
+	// equivalent-but-differently-shaped compact sort control instead;
+	// equivalent Card-mode sorting coverage lives in stock-cards.spec.ts.
+	// eslint-disable-next-line no-empty-pattern -- Playwright requires the object-destructuring form even with no fixtures used
+	test.beforeEach(({}, testInfo) => {
+		test.skip(
+			testInfo.project.name !== 'chromium-desktop',
+			'desktop-only: exercises the Table presentation'
+		);
+	});
+
 	test('defaults to Name ascending on initial load regardless of API order (TASK-032)', async ({
 		page
 	}) => {
@@ -527,23 +540,5 @@ test.describe('Watchlist table sorting', () => {
 		await expect(actionsHeader).toBeVisible();
 		await expect(actionsHeader.getByRole('button')).toHaveCount(0);
 		await expect(actionsHeader).not.toHaveAttribute('aria-sort');
-	});
-
-	test('mobile layout allows sorting without page overflow', async ({ page }, testInfo) => {
-		test.skip(testInfo.project.name !== 'chromium-mobile', 'mobile-only assertion');
-
-		await mockSingleWatchlist(page, API_ORDER);
-		await page.goto('/');
-
-		const priceButton = sortButton(page, 'Price');
-		await priceButton.scrollIntoViewIfNeeded();
-		await priceButton.click();
-
-		expect(await symbolColumn(page)).toEqual(['SAP.DE', 'AAPL', 'MSFT', 'GAW.L', 'UNKNOWN']);
-
-		const overflows = await page.evaluate(
-			() => document.documentElement.scrollWidth > document.documentElement.clientWidth
-		);
-		expect(overflows).toBe(false);
 	});
 });

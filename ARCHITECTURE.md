@@ -853,11 +853,20 @@ superseding TASK-025's acceptance that desktop scrolling was unremarkable):**
 > not the preferred behavior on a sufficiently wide desktop display.
 
 The table container's horizontal-scroll mechanism itself is unchanged and
-still required for tablet/mobile viewports and exceptional content (e.g. an
-unusually long company name). What changed is that the page and table are
-now sized so the normal, deterministic column set fits within a wide desktop
+still required for exceptional content (e.g. an unusually long company name)
+on a wide desktop viewport. What changed is that the page and table are now
+sized so the normal, deterministic column set fits within a wide desktop
 viewport without needing that fallback at all. See §14.4 and §26.11 for the
 concrete strategy.
+
+**Superseded by TASK-036 for normal tablet/mobile usage.** The paragraph
+above ("allow horizontal scrolling on narrow viewports... do not introduce a
+separate mobile card representation") described the *original* mobile/tablet
+strategy. TASK-036 replaces it: below an empirically selected breakpoint,
+Stock Cards are the normal presentation instead of a horizontally scrollable
+table. See §14.6 and §26.13 for the current responsive stock-presentation
+rule. Horizontal table scrolling remains only as the wide-desktop exceptional-
+content fallback described immediately above.
 
 ### 14.3 Accessibility
 
@@ -939,6 +948,115 @@ the returned `visible` and `overflow` arrays, is deterministic, and performs
 no DOM measurement. This is client presentation state only: it does not
 reorder or persist Watchlists, and a viewport resize that crosses a capacity
 breakpoint recomputes the split locally without any server request.
+
+### 14.6 Responsive Stock Presentation (TASK-036)
+
+> Wide viewports use the stock table for efficient cross-stock comparison.
+> Constrained viewports use Stock Cards to avoid horizontal data scrolling.
+
+This supersedes §14.2's original mobile/tablet strategy ("allow horizontal
+scrolling on narrow viewports... do not introduce a separate mobile card
+representation") for normal tablet/mobile usage, and completes the
+responsive stock-presentation evolution started by TASK-034 (§14.4, §26.11):
+
+```text
+wide desktop
+→ table (unchanged from TASK-033/TASK-034)
+
+constrained (tablet/mobile)
+→ Stock Cards (TASK-036), not a horizontally scrolling table
+```
+
+**Breakpoint.** The switch happens at a single, empirically selected width:
+
+```text
+< 1120px  -> Stock Cards
+>= 1120px -> stock table
+```
+
+This value was measured, not guessed: the table's `table-layout: fixed`
+column set has a `min-width: 68rem` (1088px, TASK-034 §42-45), and the page
+reserves `2rem` (32px) of horizontal inset around it (§26.11), so the table
+stops requiring horizontal scrolling only once the viewport reaches
+`68rem + 2rem = 70rem` (1120px) — confirmed by measuring the table
+container's `scrollWidth`/`clientWidth` across widths from 768px to 1600px
+before choosing this value, rather than reusing an arbitrary framework
+breakpoint or the existing 768/1280px Watchlist-navigation breakpoints
+(§14.5). The pure mapping lives in `stockPresentationModeForWidth()`
+(`src/lib/client/watchlistPresentation.ts`), independent of any DOM/browser
+API and unit-tested directly.
+
+**Shared pipeline, presentation-only fork.** Table and Cards consume the
+exact same derived stock collection:
+
+```text
+activeView.stocks
+        -> filterStocksByCompanyName
+        -> sortWatchlistStocks
+        -> visibleStocks
+                /       \
+            table      cards
+```
+
+`WatchlistCards.svelte` (`src/lib/components/`) is a new, dedicated
+presentational component. It receives `visibleStocks` exactly like
+`WatchlistTable.svelte` and renders it in the same order (no independent
+sort/filter). Both components share the same client `WatchlistStock`
+representation, key rows/cards by `symbol`, reuse `TargetPriceCell` verbatim
+for Target Price editing, reuse the existing formatters (`formatNumber`,
+`formatPercentage`, `formatSignedPercentage`, `formatWholeEuro`, plus a new
+`formatPriceWithCurrency` that combines Price/Currency into one Card value),
+and reuse a newly extracted shared `distanceStateFor()`
+(`src/lib/client/distancePresentation.ts`) for the favorable/unfavorable/
+neutral Distance-to-Target classification that previously lived only inside
+`WatchlistTable.svelte` — extracted specifically so Table and Cards cannot
+drift apart on this value-oriented rule (§26.10). A shared
+`SORTABLE_STOCK_COLUMNS` constant (`src/lib/client/sortableStockColumns.ts`)
+is the single source of the eight sortable columns/labels used by both the
+table's sortable headers and the Card sort control below.
+
+**Card sorting.** Sortable table headers don't exist in Card mode, so
+`WatchlistCards` renders an explicit compact sort control (a labelled
+`<select>` of the same eight sortable columns, plus a direction toggle
+button with an accessible name reporting current state, e.g. `Sort
+direction: ascending`) instead. Both controls manipulate the *same*
+`WatchlistSort` client state and the *same* `toggleWatchlistSort()`/
+`sortWatchlistStocks()` functions as the table (§26.6) via one `onSort`
+callback prop — selecting a different column always starts ascending, and
+the direction button re-invokes `onSort` with the *already-active* column,
+which `toggleWatchlistSort` reverses. There is no separate `cardSort` state,
+no second sort implementation, and sorting remains strictly raw-value based
+(never formatted strings) in both presentations. The Name-ascending default
+(TASK-032) and missing-last semantics (TASK-023) apply identically.
+
+**Presentation switch is local-only.** `+page.svelte` derives which
+component to render from the real browser viewport width via
+`stockPresentationModeForWidth(window.innerWidth)`, guarded by `$app/
+environment`'s `browser` flag so it never touches `window` during SSR
+(defaulting to the table, matching pre-TASK-036 behavior) — the same
+SSR-safety pattern already used by `WatchlistTabs`' capacity computation
+(§26.12). A `matchMedia` listener at the single breakpoint recomputes this
+on resize. Unlike Watchlist-navigation capacity, this cannot be left to CSS
+alone: `WatchlistTable` and `WatchlistCards` each mount their own per-stock
+`TargetPriceCell`/remove-button instances, so having both simultaneously
+present (even with one hidden via `display:none`) would risk duplicate
+interactive controls being discoverable in the accessibility tree. `+page
+.svelte` therefore renders the two components through a single mutually
+exclusive `{#if}`, so exactly one presentation — and exactly one set of
+per-stock interactive controls — is ever mounted at a time. Crossing the
+breakpoint on resize preserves the active Watchlist, filter text, sort
+column/direction, allocation result, and Target Price state, and never
+issues a Watchlist/stock/Target-Price/allocation request — it is exactly as
+local as the existing Watchlist-navigation capacity recomputation (§14.5).
+
+**No horizontal stock-scrolling in Card mode.** Cards flow vertically in a
+CSS grid (one column at narrow widths, two once the Card-mode range is wide
+enough for each to remain comfortably readable, per a `min-width: 56rem`
+media query — never forced at Card mode's own narrower end, e.g. 768px, and
+never more than two), preserving the supplied order (`{#each stocks as stock
+(stock.symbol)}` with no reordering). The table's existing defensive
+horizontal-scroll container (§14.2) is retained for wide-desktop exceptional
+content; it is irrelevant to Card mode, which never renders it.
 
 ## 15. Market Data
 
@@ -1878,6 +1996,32 @@ metadata; it does not reorder or persist Watchlists (§9.2, §11.3) and issues
 no additional API requests beyond the existing tab-switch/create/delete
 flows.
 
+### 26.13 Responsive Stock Presentation (TASK-036)
+
+See §14.6 for the full rule, breakpoint, and rationale. This section records
+only the client-state-specific consequences.
+
+`+page.svelte` gains one additional derived-from-viewport piece of UI state,
+`presentationMode: 'table' | 'cards'`, following the exact SSR-guard pattern
+`WatchlistTabs` already established for navigation capacity (§26.12):
+computed synchronously from `window.innerWidth` behind the `browser` flag at
+`$state` initialization (so client hydration reflects the real viewport
+immediately, with no post-mount flash), and recomputed only on a
+`matchMedia` `change` event at the single breakpoint — never on every resize
+pixel. This is presentation state exactly like `sort`/`companyNameFilter`
+(§26), not business state: it is never persisted, never sent to the server,
+and does not participate in the three existing active-Watchlist-transition
+resets (tab switch, create, delete) that already reset `sort`/
+`companyNameFilter`/`investmentAllocation` (§26.5-§26.7), because it depends
+only on viewport width, not on which Watchlist is active.
+
+`visibleStocks`, `sort`, `busy`, and `allocationBySymbol` are passed
+identically to whichever of `WatchlistTable`/`WatchlistCards` the current
+`presentationMode` selects; neither component is aware the other exists.
+`WatchlistCards`' own local state is limited to derived display values
+(e.g. the sort-direction accessible-name label) — it owns no persisted state
+of its own, matching `WatchlistTable`.
+
 ---
 
 ## 27. Testing Strategy
@@ -1935,7 +2079,7 @@ They use Playwright request routing to return deterministic responses for `/api/
 
 Real `workerd`/provider verification (Cloudflare Access, KV, Yahoo Finance, Frankfurter) remains a separate, manual deployment smoke-test concern rather than part of the normal Playwright suite. This decision may be revisited as the application grows.
 
-Desktop and narrow/mobile UI behavior (tab strip, responsive table scrolling, page-level overflow) are covered by Playwright projects using distinct viewports rather than relying on a developer's local browser window dimensions. `tests/e2e/ui-polish.spec.ts` (TASK-025) additionally covers cross-feature UI state (a complete populated page, warning/error distinction, an error-recovery flow, a keyboard-only flow, and a 768px intermediate-viewport check) that does not belong to one single focused feature spec.
+Desktop and narrow/mobile UI behavior (tab strip, Table/Card presentation, page-level overflow) are covered by Playwright projects using distinct viewports rather than relying on a developer's local browser window dimensions. `tests/e2e/ui-polish.spec.ts` (TASK-025) additionally covers cross-feature UI state (a complete populated page, warning/error distinction, an error-recovery flow, a keyboard-only flow, and a 768px intermediate-viewport check) that does not belong to one single focused feature spec. `tests/e2e/stock-cards.spec.ts` (TASK-036) covers Stock Card presentation, content, sorting, and cross-presentation state preservation specifically; `tests/e2e/watchlist-table.spec.ts`/`watchlist-sorting.spec.ts` remain scoped to the desktop Table presentation only, since Card mode has a differently shaped (but state-equivalent) sort control (§14.6, §26.13).
 
 `playwright.config.ts` pins `workers: 4` (TASK-025 §53-54). TASK-023/024 reported intermittent failures under high parallel load; TASK-025 reproduced this against an 8-core development machine (2 of 3 full-suite runs failed a different test at 8 workers, versus 0 failures across 6+ full-suite runs at 4 workers) before pinning the value, so a future change to this number should be similarly evidence-based rather than adjusted on suspicion alone.
 
@@ -2033,7 +2177,7 @@ The following ideas are intentionally left open:
 * watchlist sharing;
 * collaborative features;
 * more advanced investment-allocation strategies;
-* dedicated mobile stock-card representation or responsive column selection.
+* further responsive column selection beyond the Table/Card switch introduced by TASK-036 (§14.6, §26.13).
 
 These are not part of the initial implementation unless introduced through a later architectural decision or task.
 

@@ -11,6 +11,13 @@ Done
 > `Done`; see TASK-033 and `ARCHITECTURE.md` §13/§26.10 for the current
 > presentation rules.
 
+> **Superseded for constrained viewports by TASK-036:** this task established
+> the table as the sole stock presentation. TASK-036 later introduced Stock
+> Cards for constrained (tablet/mobile) viewports, replacing horizontal table
+> scrolling as the normal narrow-viewport experience, while preserving this
+> table unchanged for wide displays. This task's status remains `Done`; see
+> TASK-036 and `ARCHITECTURE.md` §14.6/§26.13.
+
 ## Goal
 
 Implement the read-only stock table for the currently loaded Watchlist.

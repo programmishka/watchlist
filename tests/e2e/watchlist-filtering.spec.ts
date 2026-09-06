@@ -10,6 +10,7 @@ import {
 	mockWatchlistView,
 	mockWatchlistsMetadata
 } from './support/watchlistRoutes';
+import { stockRow, stockRows } from './support/stockLocators';
 import type { WatchlistStock } from '../../src/lib/client/watchlistApi';
 
 const WATCHLIST_ID = 'wl-1';
@@ -37,7 +38,7 @@ test.describe('Watchlist filtering', () => {
 		await mockSingleWatchlist(page, FOUR_STOCKS);
 		await page.goto('/');
 
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(4);
+		await expect(stockRows(page)).toHaveCount(4);
 		await expect(page.getByText('Total: 4 stocks')).toBeVisible();
 	});
 
@@ -49,7 +50,7 @@ test.describe('Watchlist filtering', () => {
 
 		await filterInput(page).fill('shop');
 
-		const rows = page.getByRole('table').locator('tbody tr');
+		const rows = stockRows(page);
 		await expect(rows).toHaveCount(1);
 		await expect(rows.nth(0)).toContainText('GAW.L');
 		await expect(page.getByText('Total: 4 stocks · Filtered: 1 stock')).toBeVisible();
@@ -61,7 +62,7 @@ test.describe('Watchlist filtering', () => {
 
 		await filterInput(page).fill('APPLE');
 
-		const rows = page.getByRole('table').locator('tbody tr');
+		const rows = stockRows(page);
 		await expect(rows).toHaveCount(1);
 		await expect(rows.nth(0)).toContainText('AAPL');
 	});
@@ -72,7 +73,7 @@ test.describe('Watchlist filtering', () => {
 
 		await filterInput(page).fill('work');
 
-		const rows = page.getByRole('table').locator('tbody tr');
+		const rows = stockRows(page);
 		await expect(rows).toHaveCount(1);
 		await expect(rows.nth(0)).toContainText('GAW.L');
 	});
@@ -85,11 +86,11 @@ test.describe('Watchlist filtering', () => {
 
 		const input = filterInput(page);
 		await input.fill('shop');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 
 		await input.fill('');
 
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(4);
+		await expect(stockRows(page)).toHaveCount(4);
 		await expect(page.getByText('Total: 4 stocks')).toBeVisible();
 	});
 
@@ -103,7 +104,7 @@ test.describe('Watchlist filtering', () => {
 
 		await expect(page.getByText('No stocks match the current filter.')).toBeVisible();
 		await expect(page.getByText('This watchlist is empty.')).toHaveCount(0);
-		await expect(page.getByRole('table')).toHaveCount(0);
+		await expect(stockRows(page)).toHaveCount(0);
 		await expect(page.getByText('Total: 4 stocks · Filtered: 0 stocks')).toBeVisible();
 	});
 
@@ -113,15 +114,11 @@ test.describe('Watchlist filtering', () => {
 		await mockSingleWatchlist(page, FOUR_STOCKS);
 		await page.goto('/');
 
-		await expect(
-			page.getByRole('table').locator('tbody tr').filter({ hasText: 'UNKNOWN' })
-		).toBeVisible();
+		await expect(stockRow(page, 'UNKNOWN')).toBeVisible();
 
 		await filterInput(page).fill('UNKNOWN');
 
-		await expect(
-			page.getByRole('table').locator('tbody tr').filter({ hasText: 'UNKNOWN' })
-		).toHaveCount(0);
+		await expect(stockRow(page, 'UNKNOWN')).toHaveCount(0);
 		await expect(page.getByText('No stocks match the current filter.')).toBeVisible();
 	});
 
@@ -162,12 +159,12 @@ test.describe('Watchlist filtering', () => {
 
 		await page.goto('/');
 		await filterInput(page).fill('shop');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 
 		await page.getByRole('tab', { name: 'Dividend' }).click();
 
 		await expect(filterInput(page)).toHaveValue('');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 		await expect(page.getByText('Total: 1 stock', { exact: true })).toBeVisible();
 	});
 
@@ -193,7 +190,7 @@ test.describe('Watchlist filtering', () => {
 
 		await page.goto('/');
 		await filterInput(page).fill('shop');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 
 		await page.getByLabel('Watchlist name').fill('New');
 		await page.getByRole('button', { name: 'Add watchlist' }).click();
@@ -231,7 +228,7 @@ test.describe('Watchlist filtering', () => {
 
 		await page.goto('/');
 		await filterInput(page).fill('shop');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 
 		page.on('dialog', (dialog) => dialog.accept());
 		await page.getByRole('button', { name: 'Remove watchlist "Main"' }).click();
@@ -253,14 +250,14 @@ test.describe('Watchlist filtering', () => {
 
 		await page.goto('/');
 		await filterInput(page).fill('SAP');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 
 		const targetPriceInput = page.getByLabel('Target price for SAP.DE');
 		await targetPriceInput.fill('200');
 		await targetPriceInput.blur();
 
 		await expect(filterInput(page)).toHaveValue('SAP');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 		await expect(targetPriceInput).toHaveValue('200');
 	});
 
@@ -281,7 +278,7 @@ test.describe('Watchlist filtering', () => {
 		await page.getByRole('button', { name: 'Add stock' }).click();
 
 		await expect(filterInput(page)).toHaveValue('games');
-		const rows = page.getByRole('table').locator('tbody tr');
+		const rows = stockRows(page);
 		await expect(rows).toHaveCount(1);
 		await expect(rows.nth(0)).toContainText('GAW.L');
 		await expect(page.getByText('Total: 2 stocks · Filtered: 1 stock')).toBeVisible();
@@ -300,7 +297,7 @@ test.describe('Watchlist filtering', () => {
 
 		await page.goto('/');
 		await filterInput(page).fill('SAP');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 
 		await page.getByRole('button', { name: 'Remove SAP.DE' }).click();
 
@@ -324,7 +321,7 @@ test.describe('Watchlist filtering', () => {
 		await expect(input).toBeVisible();
 		await input.fill('shop');
 
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 		await expect(page.getByText('Total: 4 stocks · Filtered: 1 stock')).toBeVisible();
 
 		const overflows = await page.evaluate(
@@ -344,11 +341,11 @@ test.describe('Watchlist filtering', () => {
 		});
 
 		await page.goto('/');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(4);
+		await expect(stockRows(page)).toHaveCount(4);
 		apiRequests.length = 0;
 
 		await filterInput(page).pressSequentially('games workshop');
-		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
+		await expect(stockRows(page)).toHaveCount(1);
 
 		expect(apiRequests).toHaveLength(0);
 	});
