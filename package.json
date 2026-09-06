@@ -1,7 +1,7 @@
 {
 	"name": "watchlist-github",
 	"private": true,
-	"version": "2.2.3",
+	"version": "2.2.4",
 	"type": "module",
 	"scripts": {
 		"clean": "node -e \"require('fs').rmSync('.svelte-kit', { recursive: true, force: true })\"",

@@ -2129,6 +2129,23 @@ The application shall follow these rules:
 8. External input and mutation payloads are validated server-side.
 9. Provider/internal error details are not directly exposed to users.
 
+### 29.1 Input Boundary Validation (TASK-037)
+
+> Browser input constraints are UX only; all externally controlled values
+> require authoritative server-side validation and explicit bounds.
+
+An HTML constraint such as `maxlength` on a client `<input>` never makes a
+value safe — a caller can bypass the browser entirely and call any public
+endpoint directly (e.g. `POST /api/watchlists`) with arbitrary string
+length or numeric magnitude. Every externally controlled string and
+numeric value (request bodies, URL path parameters) must eventually have
+an explicit, justified bound enforced at the server boundary, independent
+of whatever the browser does or does not restrict. TASK-037 audited every
+current input against this rule; see `docs/security/input-boundary-audit.md`
+for the full inventory and gap analysis. The concrete numeric/length
+bounds identified as currently missing are recommendations pending
+TASK-038 implementation, not yet part of this architecture.
+
 ---
 
 ## 30. Empty and Error States
