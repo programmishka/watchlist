@@ -4,6 +4,14 @@
 
 Done
 
+> **Layout revised by TASK-034.** Watchlist creation was later moved from its
+> own full-width row into the same compact row as the Watchlist tabs, and the
+> large standalone "Delete current watchlist" button described below (§10-§15)
+> was replaced by a compact delete control attached directly to the active
+> tab. The creation/deletion behavior this task established (validation,
+> duplicate-name handling, busy-state serialization, confirmation) is
+> unchanged; only its visual placement changed.
+
 ## Goal
 
 Implement the user interface for creating and deleting Watchlists.

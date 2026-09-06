@@ -242,7 +242,7 @@ test.describe('Watchlist management', () => {
 			expect(dialog.message()).toContain('Main');
 			void dialog.dismiss();
 		});
-		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
+		await page.getByRole('button', { name: 'Remove watchlist "Main"' }).click();
 
 		expect(deleteCalls.calls).toHaveLength(0);
 		await expect(page.getByRole('tab', { name: 'Main' })).toBeVisible();
@@ -280,7 +280,7 @@ test.describe('Watchlist management', () => {
 
 		await page.goto('/');
 		page.once('dialog', (dialog) => void dialog.accept());
-		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
+		await page.getByRole('button', { name: 'Remove watchlist "Dividend"' }).click();
 
 		expect(deleteCalls.calls).toHaveLength(1);
 		await expect(page.getByRole('tab', { name: 'Dividend' })).toHaveCount(0);
@@ -317,7 +317,7 @@ test.describe('Watchlist management', () => {
 
 		await page.goto('/');
 		page.once('dialog', (dialog) => void dialog.accept());
-		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
+		await page.getByRole('button', { name: 'Remove watchlist "Main"' }).click();
 
 		expect(deleteCalls.calls).toHaveLength(1);
 		await expect(page.getByRole('tab', { name: 'Main' })).toHaveCount(0);
@@ -328,7 +328,7 @@ test.describe('Watchlist management', () => {
 		await expect(page.getByText('SAP.DE')).toBeVisible();
 	});
 
-	test('deleting the final watchlist shows the no-watchlists state and disables delete', async ({
+	test('deleting the final watchlist shows the no-watchlists state and removes the delete control', async ({
 		page
 	}) => {
 		await mockWatchlistsMetadata(page, {
@@ -345,12 +345,13 @@ test.describe('Watchlist management', () => {
 
 		await page.goto('/');
 		page.once('dialog', (dialog) => void dialog.accept());
-		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
+		await page.getByRole('button', { name: 'Remove watchlist "Main"' }).click();
 
 		expect(deleteCalls.calls).toHaveLength(1);
 		await expect(page.getByText('No watchlist has been created yet.')).toBeVisible();
 		await expect(page.getByRole('tablist')).toHaveCount(0);
-		await expect(page.getByRole('button', { name: 'Delete current watchlist' })).toBeDisabled();
+		// No watchlists remain, so there is no active tab to attach a delete control to (TASK-034 §15).
+		await expect(page.getByRole('button', { name: /Remove watchlist/ })).toHaveCount(0);
 		// The composed watchlist GET recorded from initial load only; no follow-up GET after deletion.
 		expect(wl1ViewCalls.calls).toEqual(['wl-1']);
 	});
@@ -373,7 +374,7 @@ test.describe('Watchlist management', () => {
 
 		await page.goto('/');
 		page.once('dialog', (dialog) => void dialog.accept());
-		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
+		await page.getByRole('button', { name: 'Remove watchlist "Main"' }).click();
 
 		await expect(page.getByRole('tab', { name: 'Main' })).toHaveAttribute('aria-selected', 'true');
 		await expect(page.getByText('AAPL')).toBeVisible();
@@ -412,7 +413,7 @@ test.describe('Watchlist management', () => {
 
 		await page.goto('/');
 		page.once('dialog', (dialog) => void dialog.accept());
-		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
+		await page.getByRole('button', { name: 'Remove watchlist "Main"' }).click();
 
 		await expect(page.getByRole('tab', { name: 'Main' })).toHaveCount(0);
 		await expect(page.getByRole('tab', { name: 'Dividend' })).toHaveAttribute(
@@ -420,6 +421,29 @@ test.describe('Watchlist management', () => {
 			'true'
 		);
 		await expect(page.getByText('Unable to load this watchlist right now.')).toBeVisible();
+	});
+
+	test('only the active tab exposes a delete control, named after that watchlist (TASK-034)', async ({
+		page
+	}) => {
+		await mockWatchlistsMetadata(page, {
+			activeWatchlistId: 'wl-1',
+			watchlists: [
+				{ id: 'wl-1', name: 'Main' },
+				{ id: 'wl-2', name: 'Dividend' }
+			]
+		});
+		await mockWatchlistView(page, 'wl-1', {
+			id: 'wl-1',
+			name: 'Main',
+			stocks: [AAPL_STOCK],
+			warnings: []
+		});
+
+		await page.goto('/');
+
+		await expect(page.getByRole('button', { name: 'Remove watchlist "Main"' })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Remove watchlist "Dividend"' })).toHaveCount(0);
 	});
 
 	test('mobile layout keeps create/delete controls and tabs usable without page overflow', async ({
@@ -442,7 +466,7 @@ test.describe('Watchlist management', () => {
 
 		await expect(page.getByLabel('Watchlist name')).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Add watchlist' })).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Delete current watchlist' })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Remove watchlist "Main"' })).toBeVisible();
 		await expect(page.getByRole('tab', { name: 'Main' })).toBeVisible();
 
 		const overflows = await page.evaluate(

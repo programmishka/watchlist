@@ -67,12 +67,14 @@ test.describe('UI polish: complete populated page', () => {
 			'aria-selected',
 			'false'
 		);
-		await expect(page.getByRole('heading', { name: 'Main', level: 2 })).toBeVisible();
+		// The active tab is the sole workspace identification (TASK-034 §71):
+		// no standalone heading duplicates the active Watchlist's name.
+		await expect(page.getByRole('heading', { name: 'Main', level: 2 })).toHaveCount(0);
 
 		// Watchlist management controls.
 		await expect(page.getByLabel('Watchlist name')).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Add watchlist' })).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Delete current watchlist' })).toBeEnabled();
+		await expect(page.getByRole('button', { name: 'Remove watchlist "Main"' })).toBeEnabled();
 
 		// Stock management + filter controls.
 		await expect(page.getByLabel('Stock symbol')).toBeVisible();
@@ -83,11 +85,11 @@ test.describe('UI polish: complete populated page', () => {
 		await expect(
 			page.getByRole('button', { name: 'Calculate investment allocation' })
 		).toBeVisible();
-		await expect(page.getByText('Invested:')).toHaveCount(0);
+		await expect(page.getByText('Allocated savings:')).toHaveCount(0);
 
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		// Table content: positive distance, negative distance, and a
 		// calculated (non-placeholder) savings amount coexist with a
@@ -248,14 +250,19 @@ test.describe('UI polish: keyboard smoke flow', () => {
 		await expect(page.getByText('AAPL')).toBeVisible();
 
 		// Once the mutation settles, Tab continues to move keyboard focus
-		// forward through the other table-scoped controls, reaching the
-		// filter input without requiring a pointer.
-		const totalSavingsInput = page.getByLabel('Total savings');
-		await totalSavingsInput.focus();
-		await expect(totalSavingsInput).toBeFocused();
-		await page.keyboard.press('Tab'); // Calculate button
+		// forward through the toolbar (stock mutation, then table presentation,
+		// then allocation — TASK-034 §22-23), reaching the filter input and
+		// then Total Savings without requiring a pointer.
+		await symbolInput.focus();
+		await expect(symbolInput).toBeFocused();
+		// The Add stock button is disabled once the symbol input is empty
+		// again after a successful add, so Tab skips it and reaches the
+		// filter input directly.
 		await page.keyboard.press('Tab'); // Filter by company name input
 		await expect(page.getByLabel('Filter by company name')).toBeFocused();
+
+		await page.keyboard.press('Tab'); // Total savings input
+		await expect(page.getByLabel('Total savings')).toBeFocused();
 	});
 });
 
@@ -293,7 +300,7 @@ test.describe('UI polish: viewport regression', () => {
 
 		await expect(page.getByRole('tablist')).toBeVisible();
 		await expect(page.getByLabel('Watchlist name')).toBeVisible();
-		await expect(page.getByRole('button', { name: 'Delete current watchlist' })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Remove watchlist "Main"' })).toBeVisible();
 		await expect(page.getByLabel('Stock symbol')).toBeVisible();
 		await expect(page.getByLabel('Filter by company name')).toBeVisible();
 		await expect(page.getByLabel('Total savings')).toBeVisible();
@@ -314,5 +321,30 @@ test.describe('UI polish: viewport regression', () => {
 		await expect(page.getByText('4 stocks')).toBeVisible();
 
 		expect(await pageOverflowsHorizontally(page)).toBe(false);
+	});
+
+	test('1600px complete page uses the wider desktop workspace and fits the table without horizontal scrolling', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'chromium-desktop', 'run once, not per-project');
+		await page.setViewportSize({ width: 1600, height: 900 });
+
+		await mockPopulatedApplication(page);
+		await page.goto('/');
+
+		await expect(page.getByRole('heading', { name: 'Watchlist', level: 1 })).toBeVisible();
+		await expect(page.getByRole('tablist')).toBeVisible();
+		await expect(page.getByRole('table')).toBeVisible();
+		await expect(page.getByText('4 stocks')).toBeVisible();
+
+		expect(await pageOverflowsHorizontally(page)).toBe(false);
+
+		// Key acceptance criterion (TASK-034 §87/§92): the normal deterministic
+		// fixture fits the table container at 1600px without horizontal scrolling.
+		const { scrollWidth, clientWidth } = await page.evaluate(() => {
+			const container = document.querySelector('table')?.parentElement;
+			return { scrollWidth: container?.scrollWidth ?? 0, clientWidth: container?.clientWidth ?? 0 };
+		});
+		expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
 	});
 });

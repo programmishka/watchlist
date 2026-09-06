@@ -227,7 +227,7 @@ test.describe('Watchlist filtering', () => {
 		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
 
 		page.on('dialog', (dialog) => dialog.accept());
-		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
+		await page.getByRole('button', { name: 'Remove watchlist "Main"' }).click();
 
 		await expect(filterInput(page)).toHaveValue('');
 		await expect(page.getByText('SAP.DE')).toBeVisible();

@@ -408,13 +408,33 @@
 			{metadataError?.message ?? 'Failed to load watchlists.'}
 		</p>
 	{:else}
-		<section class="management" aria-label="Watchlist management">
+		<!--
+			Consolidated watchlist bar (TASK-034 §16, §21): tabs and Watchlist
+			creation share one compact row instead of separate full-width rows.
+			Per-tab deletion is now owned by WatchlistTabs itself (adjacent to the
+			active tab), so there is no separate standalone delete button here.
+		-->
+		<section class="watchlist-bar" aria-label="Watchlist management">
+			<div class="tabs-wrapper">
+				{#if watchlists.length > 0}
+					<WatchlistTabs
+						{watchlists}
+						{activeWatchlistId}
+						disabled={managementBusy}
+						deleteBusy={deleteStatus === 'deleting'}
+						onSelect={handleSelectTab}
+						onDeleteActive={handleDeleteClick}
+					/>
+				{/if}
+			</div>
+
 			<form class="create-form" onsubmit={handleCreateSubmit}>
-				<label class="create-label" for="new-watchlist-name">Watchlist name</label>
+				<label class="sr-only" for="new-watchlist-name">Watchlist name</label>
 				<input
 					id="new-watchlist-name"
 					class="field-input create-input"
 					type="text"
+					placeholder="New watchlist name"
 					bind:value={newWatchlistName}
 					disabled={managementBusy}
 					autocomplete="off"
@@ -429,60 +449,48 @@
 					+
 				</button>
 			</form>
-
-			{#if createError}
-				<p class="status status-error" role="alert">
-					Couldn't create watchlist: {createError.message}
-				</p>
-			{/if}
-
-			<div class="tabs-row">
-				{#if watchlists.length > 0}
-					<div class="tabs-wrapper">
-						<WatchlistTabs
-							{watchlists}
-							{activeWatchlistId}
-							disabled={managementBusy}
-							onSelect={handleSelectTab}
-						/>
-					</div>
-				{/if}
-
-				<button
-					type="button"
-					class="btn btn-destructive"
-					onclick={handleDeleteClick}
-					disabled={watchlists.length === 0 || managementBusy}
-					aria-busy={deleteStatus === 'deleting'}
-				>
-					Delete current watchlist
-				</button>
-			</div>
-
-			{#if deleteError}
-				<p class="status status-error" role="alert">
-					Couldn't delete watchlist: {deleteError.message}
-				</p>
-			{/if}
-
-			{#if tabSwitchError}
-				<p class="status status-error" role="alert">
-					Couldn't switch watchlist: {tabSwitchError.message}
-				</p>
-			{/if}
 		</section>
 
-		{#if watchlists.length === 0}
-			<p class="status empty-state">No watchlist has been created yet.</p>
-		{:else}
-			<div class="content">
-				{#if activeWatchlistId}
-					<form class="add-stock-form" onsubmit={handleAddStockSubmit}>
-						<label class="add-stock-label" for="new-stock-symbol">Stock symbol</label>
+		{#if createError}
+			<p class="status status-error" role="alert">
+				Couldn't create watchlist: {createError.message}
+			</p>
+		{/if}
+
+		{#if deleteError}
+			<p class="status status-error" role="alert">
+				Couldn't delete watchlist: {deleteError.message}
+			</p>
+		{/if}
+
+		{#if tabSwitchError}
+			<p class="status status-error" role="alert">
+				Couldn't switch watchlist: {tabSwitchError.message}
+			</p>
+		{/if}
+	{/if}
+
+	{#if watchlists.length === 0}
+		<p class="status empty-state">No watchlist has been created yet.</p>
+	{:else}
+		<div class="content">
+			{#if activeWatchlistId}
+				<!--
+					Compact primary workspace toolbar (TASK-034 §21-38): stock
+					mutation, table presentation, and allocation form three logical
+					groups within one flex row that wraps as space runs out. The
+					presentation/allocation groups only appear once stocks exist —
+					filtering/allocating an empty watchlist is meaningless, and the
+					lone stock-add control remains available to add the first stock.
+				-->
+				<div class="workspace-toolbar">
+					<form class="toolbar-group stock-group" onsubmit={handleAddStockSubmit}>
+						<label class="sr-only" for="new-stock-symbol">Stock symbol</label>
 						<input
 							id="new-stock-symbol"
-							class="field-input add-stock-input"
+							class="field-input stock-symbol-input"
 							type="text"
+							placeholder="Stock symbol"
 							value={newStockSymbol}
 							oninput={handleStockSymbolInput}
 							disabled={managementBusy}
@@ -499,116 +507,114 @@
 						</button>
 					</form>
 
-					{#if stockSymbolValidationError}
-						<p class="status status-error" role="alert">{stockSymbolValidationError}</p>
-					{:else if stockMutationError}
-						<p class="status status-error" role="alert">{stockMutationError.message}</p>
-					{/if}
-				{/if}
-
-				{#if activeViewStatus === 'loading'}
-					<p class="status">Loading watchlist…</p>
-				{:else if activeViewStatus === 'error'}
-					<p class="status status-error" role="alert">
-						{activeViewError?.message ?? 'Failed to load watchlist.'}
-					</p>
-				{:else if activeViewStatus === 'loaded' && activeView}
-					{#each activeView.warnings as warning (warning.code)}
-						<p class="status status-warning" role="status">{warning.message}</p>
-					{/each}
-
-					{#if activeView.stocks.length === 0}
-						<p class="status empty-state">This watchlist is empty.</p>
-					{:else}
-						<h2 class="watchlist-heading">{activeView.name}</h2>
-
-						<div class="table-controls">
-							<form class="allocation-form" onsubmit={handleCalculateAllocation}>
-								<label class="allocation-label" for="total-savings">Total savings</label>
-								<input
-									id="total-savings"
-									class="field-input allocation-input"
-									type="text"
-									inputmode="numeric"
-									bind:value={totalSavingsInput}
-									aria-invalid={allocationInputError !== undefined}
-									aria-describedby={allocationInputError || allocationError
-										? 'allocation-feedback'
-										: undefined}
-									disabled={managementBusy}
-									autocomplete="off"
-								/>
-								<button
-									type="submit"
-									class="btn btn-primary"
-									aria-label="Calculate investment allocation"
-									aria-busy={allocationBusy}
-									disabled={managementBusy}
-								>
-									Calculate
-								</button>
-								{#if investmentAllocation}
-									<span class="invested"
-										>Invested: {formatWholeEuro(investmentAllocation.invested)}</span
-									>
-								{/if}
-							</form>
-
-							{#if allocationInputError}
-								<p id="allocation-feedback" class="status status-error" role="alert">
-									{allocationInputError}
-								</p>
-							{:else if allocationError}
-								<p id="allocation-feedback" class="status status-error" role="alert">
-									{allocationError.message}
-								</p>
-							{/if}
-
-							<div class="filter-row">
-								<label class="filter-label" for="company-name-filter">
-									Filter by company name
-								</label>
-								<input
-									id="company-name-filter"
-									class="field-input filter-input"
-									type="text"
-									bind:value={companyNameFilter}
-									autocomplete="off"
-								/>
-							</div>
+					{#if activeViewStatus === 'loaded' && activeView && activeView.stocks.length > 0}
+						<div class="toolbar-group filter-group">
+							<label class="sr-only" for="company-name-filter"> Filter by company name </label>
+							<input
+								id="company-name-filter"
+								class="field-input filter-input"
+								type="text"
+								placeholder="Filter by company name"
+								bind:value={companyNameFilter}
+								autocomplete="off"
+							/>
 						</div>
 
-						{#if filteredStocks.length === 0}
-							<p class="status filtered-empty">No stocks match the current filter.</p>
-						{:else}
-							<WatchlistTable
-								stocks={visibleStocks}
-								{sort}
-								busy={managementBusy}
-								{allocationBySymbol}
-								onSort={handleSort}
-								onRemove={handleRemoveStock}
-								onSaveTargetPrice={handleSaveTargetPrice}
+						<form class="toolbar-group allocation-group" onsubmit={handleCalculateAllocation}>
+							<label class="sr-only" for="total-savings">Total savings</label>
+							<input
+								id="total-savings"
+								class="field-input allocation-input"
+								type="text"
+								inputmode="numeric"
+								placeholder="Total savings"
+								bind:value={totalSavingsInput}
+								aria-invalid={allocationInputError !== undefined}
+								aria-describedby={allocationInputError || allocationError
+									? 'allocation-feedback'
+									: undefined}
+								disabled={managementBusy}
+								autocomplete="off"
 							/>
-						{/if}
-
-						<p class="count">{stockCountText}</p>
+							<button
+								type="submit"
+								class="btn btn-primary"
+								aria-label="Calculate investment allocation"
+								aria-busy={allocationBusy}
+								disabled={managementBusy}
+							>
+								Calculate
+							</button>
+							{#if investmentAllocation}
+								<span class="allocation-result"
+									>Allocated savings: {formatWholeEuro(investmentAllocation.invested)}</span
+								>
+							{/if}
+						</form>
 					{/if}
+				</div>
+
+				{#if stockSymbolValidationError}
+					<p class="status status-error" role="alert">{stockSymbolValidationError}</p>
+				{:else if stockMutationError}
+					<p class="status status-error" role="alert">{stockMutationError.message}</p>
 				{/if}
-			</div>
-		{/if}
+
+				{#if allocationInputError}
+					<p id="allocation-feedback" class="status status-error" role="alert">
+						{allocationInputError}
+					</p>
+				{:else if allocationError}
+					<p id="allocation-feedback" class="status status-error" role="alert">
+						{allocationError.message}
+					</p>
+				{/if}
+			{/if}
+
+			{#if activeViewStatus === 'loading'}
+				<p class="status">Loading watchlist…</p>
+			{:else if activeViewStatus === 'error'}
+				<p class="status status-error" role="alert">
+					{activeViewError?.message ?? 'Failed to load watchlist.'}
+				</p>
+			{:else if activeViewStatus === 'loaded' && activeView}
+				{#each activeView.warnings as warning (warning.code)}
+					<p class="status status-warning" role="status">{warning.message}</p>
+				{/each}
+
+				{#if activeView.stocks.length === 0}
+					<p class="status empty-state">This watchlist is empty.</p>
+				{:else if filteredStocks.length === 0}
+					<p class="status filtered-empty">No stocks match the current filter.</p>
+				{:else}
+					<WatchlistTable
+						stocks={visibleStocks}
+						{sort}
+						busy={managementBusy}
+						{allocationBySymbol}
+						onSort={handleSort}
+						onRemove={handleRemoveStock}
+						onSaveTargetPrice={handleSaveTargetPrice}
+					/>
+				{/if}
+
+				{#if activeView.stocks.length > 0}
+					<p class="count">{stockCountText}</p>
+				{/if}
+			{/if}
+		</div>
 	{/if}
 </div>
 
 <style>
 	.page {
-		max-width: 960px;
-		margin: 0 auto;
-		padding: 1rem clamp(1rem, 4vw, 2rem);
+		width: min(calc(100% - 2rem), 1600px);
+		margin-inline: auto;
+		padding-block: 1rem 2rem;
 	}
 
 	.header {
-		margin-bottom: 1rem;
+		margin-bottom: 0.75rem;
 	}
 
 	h1 {
@@ -617,126 +623,98 @@
 		margin: 0;
 	}
 
-	.watchlist-heading {
-		font-size: 1.15rem;
-		font-weight: 600;
-		margin: 0 0 0.75rem;
-	}
-
 	.content {
-		margin-top: 1rem;
+		margin-top: 0.75rem;
 	}
 
-	.add-stock-form {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 0.75rem;
-	}
-
-	.add-stock-label {
-		font-size: 0.9rem;
-		color: var(--color-text-muted);
-	}
-
-	.add-stock-input {
-		flex: 1 1 12rem;
-		min-width: 0;
-	}
-
-	.management {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-		padding-bottom: 1rem;
-		margin-bottom: 1.25rem;
-		border-bottom: 1px solid var(--color-border-subtle);
-	}
-
-	.create-form {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.create-label {
-		font-size: 0.9rem;
-		color: var(--color-text-muted);
-	}
-
-	.create-input {
-		flex: 1 1 12rem;
-		min-width: 0;
-	}
-
-	.tabs-row {
+	.watchlist-bar {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
 		gap: 0.75rem;
+		padding-bottom: 0.75rem;
+		margin-bottom: 0.75rem;
+		border-bottom: 1px solid var(--color-border-subtle);
 	}
 
 	.tabs-wrapper {
-		flex: 1 1 auto;
+		flex: 1 1 16rem;
 		min-width: 0;
+	}
+
+	.create-form {
+		display: flex;
+		flex-wrap: nowrap;
+		align-items: center;
+		gap: 0.5rem;
+		flex: 0 0 auto;
+	}
+
+	.create-input {
+		width: 12rem;
+		max-width: 14rem;
 	}
 
 	.status {
 		color: var(--color-text-muted);
 	}
 
-	/* Groups the table-scoped calculation and presentation controls
-	   (allocation, filter) together, distinct from the stock-add mutation
-	   above and the table below (TASK-025 §4). */
-	.table-controls {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		padding-top: 0.5rem;
-		margin-bottom: 0.75rem;
-	}
-
-	.allocation-form {
+	/* Compact primary workspace toolbar (TASK-034 §21-23): three logical
+	   groups (stock mutation, table presentation, allocation) separated by
+	   spacing rather than borders, wrapping as a whole per group so mobile
+	   stacks each group on its own line. */
+	.workspace-toolbar {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.6rem 1.5rem;
+		padding: 0.5rem 0;
+		margin-bottom: 0.4rem;
 	}
 
-	.allocation-label {
-		font-size: 0.9rem;
-		color: var(--color-text-muted);
-	}
-
-	.allocation-input {
-		flex: 0 1 8rem;
+	.toolbar-group {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+		/* Without this, a flex item's default `min-width: auto` refuses to
+		   shrink below its content's unwrapped width, which would force page
+		   overflow at narrow viewports instead of letting the group's own
+		   flex-wrap reflow its children onto separate lines (TASK-034 §37-38). */
 		min-width: 0;
-		text-align: right;
 	}
 
-	.invested {
-		font-weight: 600;
-		color: var(--color-text);
+	.stock-group {
+		flex: 0 1 auto;
 	}
 
-	.filter-row {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.5rem;
+	.stock-symbol-input {
+		width: 11rem;
 	}
 
-	.filter-label {
-		font-size: 0.9rem;
-		color: var(--color-text-muted);
+	.filter-group {
+		flex: 1 1 17.5rem;
 	}
 
 	.filter-input {
-		flex: 1 1 12rem;
-		min-width: 0;
-		max-width: 20rem;
+		width: 100%;
+		min-width: 17.5rem;
+		max-width: 25rem;
+	}
+
+	.allocation-group {
+		flex: 0 1 auto;
+		margin-left: auto;
+	}
+
+	.allocation-input {
+		width: 7rem;
+		text-align: right;
+	}
+
+	.allocation-result {
+		font-weight: 600;
+		color: var(--color-text);
 	}
 
 	.count {

@@ -47,7 +47,7 @@ function savingsCellFor(page: Page, symbol: string) {
 }
 
 test.describe('Investment allocation', () => {
-	test('shows the placeholder in every Savings Amount cell and no Invested value before calculation', async ({
+	test('shows the placeholder in every Savings Amount cell and no Allocated savings value before calculation', async ({
 		page
 	}) => {
 		await mockSingleWatchlist(page);
@@ -58,7 +58,7 @@ test.describe('Investment allocation', () => {
 		await expect(savingsCellFor(page, 'AAPL')).toHaveText('—');
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('—');
 		await expect(savingsCellFor(page, 'GAW.L')).toHaveText('—');
-		await expect(page.getByText('Invested:')).toHaveCount(0);
+		await expect(page.getByText('Allocated savings:')).toHaveCount(0);
 	});
 
 	test('calculates and displays the allocation by symbol, independent of response order', async ({
@@ -81,7 +81,7 @@ test.describe('Investment allocation', () => {
 		await expect(savingsCellFor(page, 'AAPL')).toHaveText('€320');
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('€427');
 		await expect(savingsCellFor(page, 'GAW.L')).toHaveText('€250');
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 	});
 
 	test('calculates exactly once on Enter in the Total Savings input', async ({ page }) => {
@@ -97,7 +97,7 @@ test.describe('Investment allocation', () => {
 		await input.fill('1000');
 		await input.press('Enter');
 
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 		expect(allocationCalls.calls).toHaveLength(1);
 	});
 
@@ -117,7 +117,7 @@ test.describe('Investment allocation', () => {
 
 		await expect(savingsCellFor(page, 'AAPL')).toHaveText('€0');
 		await expect(savingsCellFor(page, 'AAPL')).not.toHaveText('—');
-		await expect(page.getByText('Invested: €0')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €0')).toBeVisible();
 	});
 
 	test('gives factor/savings 0 for a stock with unavailable distance without preventing other stocks from participating (TASK-031)', async ({
@@ -137,7 +137,7 @@ test.describe('Investment allocation', () => {
 		await page.getByLabel('Total savings').fill('500');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
 
-		await expect(page.getByText('Invested: €500')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €500')).toBeVisible();
 		const unknownRow = page.getByRole('table').locator('tbody tr').filter({ hasText: 'UNKNOWN' });
 		await expect(unknownRow.getByRole('cell').nth(7)).toHaveText('—'); // distance to target still unavailable
 		await expect(savingsCellFor(page, 'UNKNOWN')).toHaveText('€0');
@@ -158,14 +158,14 @@ test.describe('Investment allocation', () => {
 		const input = page.getByLabel('Total savings');
 		await input.fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		await input.fill('-1');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
 
 		expect(allocationCalls.calls).toHaveLength(1);
 		await expect(page.getByRole('alert')).toBeVisible();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 	});
 
 	test('shows a server allocation failure and preserves the previous allocation', async ({
@@ -190,13 +190,13 @@ test.describe('Investment allocation', () => {
 		const input = page.getByLabel('Total savings');
 		await input.fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		await input.fill('2000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
 
 		await expect(page.getByRole('alert')).toContainText('Total savings must be a whole number.');
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 		await expect(savingsCellFor(page, 'AAPL')).toHaveText('€320');
 	});
 
@@ -223,13 +223,13 @@ test.describe('Investment allocation', () => {
 		const input = page.getByLabel('Total savings');
 		await input.fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		await input.fill('500');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
 
 		await expect(page.getByRole('alert')).toContainText('Market data is currently unavailable.');
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 	});
 
 	test('sends only totalSavings and ignores an active company-name filter, but still reflects the complete allocation', async ({
@@ -252,7 +252,7 @@ test.describe('Investment allocation', () => {
 		expect(allocationCalls.calls).toEqual([
 			{ totalSavings: 1000, rawBody: { totalSavings: 1000 } }
 		]);
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 		await expect(savingsCellFor(page, 'AAPL')).toHaveText('€320');
 	});
 
@@ -269,7 +269,7 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		const filter = page.getByLabel('Filter by company name');
 		await filter.fill('Apple');
@@ -295,7 +295,7 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		await page.getByRole('button', { name: 'Sort by Symbol' }).click();
 
@@ -324,14 +324,14 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		const targetPriceInput = page.getByLabel('Target price for SAP.DE');
 		await targetPriceInput.fill('160');
 		await targetPriceInput.blur();
 		await expect(targetPriceInput).toHaveValue('160');
 
-		await expect(page.getByText('Invested:')).toHaveCount(0);
+		await expect(page.getByText('Allocated savings:')).toHaveCount(0);
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('—');
 		await expect(savingsCellFor(page, 'AAPL')).toHaveText('—');
 		expect(allocationCalls.calls).toHaveLength(1);
@@ -350,14 +350,14 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		const targetPriceInput = page.getByLabel('Target price for SAP.DE');
 		await targetPriceInput.fill('999');
 		await targetPriceInput.blur();
 
 		await expect(page.getByRole('alert')).toContainText('The target price must be greater than 0.');
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('€427');
 	});
 
@@ -380,13 +380,13 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		const targetPriceInput = page.getByLabel('Target price for SAP.DE');
 		await targetPriceInput.fill('160');
 		await targetPriceInput.blur();
 
-		await expect(page.getByText('Invested:')).toHaveCount(0);
+		await expect(page.getByText('Allocated savings:')).toHaveCount(0);
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('—');
 	});
 
@@ -412,13 +412,13 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €990')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €990')).toBeVisible();
 
 		await page.getByLabel('Stock symbol').fill('AAPL');
 		await page.getByRole('button', { name: 'Add stock' }).click();
 		await expect(page.getByText('AAPL')).toBeVisible();
 
-		await expect(page.getByText('Invested:')).toHaveCount(0);
+		await expect(page.getByText('Allocated savings:')).toHaveCount(0);
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('—');
 		expect(allocationCalls.calls).toHaveLength(1);
 	});
@@ -434,13 +434,13 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		await page.getByLabel('Stock symbol').fill('BOGUS');
 		await page.getByRole('button', { name: 'Add stock' }).click();
 
 		await expect(page.getByRole('alert')).toContainText('The symbol could not be found.');
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 	});
 
 	test('a successful stock removal invalidates the allocation', async ({ page }) => {
@@ -456,12 +456,12 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		await page.getByRole('button', { name: 'Remove AAPL' }).click();
 		await expect(page.getByText('AAPL')).toHaveCount(0);
 
-		await expect(page.getByText('Invested:')).toHaveCount(0);
+		await expect(page.getByText('Allocated savings:')).toHaveCount(0);
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('—');
 	});
 
@@ -476,12 +476,12 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		await page.getByRole('button', { name: 'Remove AAPL' }).click();
 
 		await expect(page.getByRole('alert')).toContainText('The symbol is not in this watchlist.');
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 	});
 
 	test('switching Watchlist tabs clears the allocation', async ({ page }) => {
@@ -516,7 +516,7 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		await page.getByRole('tab', { name: 'Dividend' }).click();
 		await expect(page.getByRole('tab', { name: 'Dividend' })).toHaveAttribute(
@@ -524,7 +524,7 @@ test.describe('Investment allocation', () => {
 			'true'
 		);
 
-		await expect(page.getByText('Invested:')).toHaveCount(0);
+		await expect(page.getByText('Allocated savings:')).toHaveCount(0);
 		await expect(savingsCellFor(page, 'GAW.L')).toHaveText('—');
 	});
 
@@ -548,13 +548,13 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		await page.getByLabel('Watchlist name').fill('Tech');
 		await page.getByRole('button', { name: 'Add watchlist' }).click();
 
 		expect(createCalls.calls).toEqual(['Tech']);
-		await expect(page.getByText('Invested:')).toHaveCount(0);
+		await expect(page.getByText('Allocated savings:')).toHaveCount(0);
 		await expect(savingsCellFor(page, 'AAPL')).toHaveText('—');
 	});
 
@@ -589,16 +589,16 @@ test.describe('Investment allocation', () => {
 		await page.goto('/');
 		await page.getByLabel('Total savings').fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		page.once('dialog', (dialog) => void dialog.accept());
-		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
+		await page.getByRole('button', { name: 'Remove watchlist "Main"' }).click();
 
 		await expect(page.getByRole('tab', { name: 'Dividend' })).toHaveAttribute(
 			'aria-selected',
 			'true'
 		);
-		await expect(page.getByText('Invested:')).toHaveCount(0);
+		await expect(page.getByText('Allocated savings:')).toHaveCount(0);
 		await expect(savingsCellFor(page, 'GAW.L')).toHaveText('—');
 	});
 
@@ -616,11 +616,11 @@ test.describe('Investment allocation', () => {
 		const input = page.getByLabel('Total savings');
 		await input.fill('1000');
 		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		await input.fill('2000');
 
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 		await expect(savingsCellFor(page, 'AAPL')).toHaveText('€320');
 		expect(allocationCalls.calls).toHaveLength(1);
 	});
@@ -643,7 +643,7 @@ test.describe('Investment allocation', () => {
 		await expect(button).toBeVisible();
 		await button.click();
 
-		await expect(page.getByText('Invested: €997')).toBeVisible();
+		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 
 		const savingsHeader = page.getByRole('columnheader', { name: 'Savings Amount' });
 		await savingsHeader.scrollIntoViewIfNeeded();

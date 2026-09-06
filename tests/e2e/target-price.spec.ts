@@ -95,7 +95,7 @@ test.describe('Target Price editing', () => {
 		await input.fill('175');
 		await input.press('Enter');
 		await expect(input).toHaveValue('175');
-		await page.getByRole('heading', { level: 2 }).click();
+		await page.getByRole('heading', { name: 'Watchlist', level: 1 }).click();
 
 		expect(putCalls.calls).toEqual([{ symbol: 'SAP.DE', targetPrice: 175 }]);
 	});

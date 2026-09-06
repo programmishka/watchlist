@@ -375,7 +375,7 @@ test.describe('Watchlist table sorting', () => {
 		await expect(columnHeader(page, 'Price')).toHaveAttribute('aria-sort', 'ascending');
 
 		page.once('dialog', (dialog) => void dialog.accept());
-		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
+		await page.getByRole('button', { name: 'Remove watchlist "Main"' }).click();
 
 		await expect(symbolColumnLocator(page)).toHaveText(['GAW.L', 'SAP.DE']);
 		await expect(columnHeader(page, 'Name')).toHaveAttribute('aria-sort', 'ascending');

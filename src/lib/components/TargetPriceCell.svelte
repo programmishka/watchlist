@@ -100,10 +100,10 @@
 
 <style>
 	.target-price-input {
-		width: 5.5rem;
+		width: 6rem;
 		max-width: 100%;
 		min-height: 2.25rem;
-		padding: 0.35rem 0.5rem;
+		padding: 0.35rem 0.4rem;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius);
 		font: inherit;

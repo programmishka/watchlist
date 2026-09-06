@@ -4,6 +4,14 @@
 
 Done
 
+> **UI terminology revised by TASK-034.** The result label described below as
+> `Invested` was renamed in the UI to `Allocated savings` to better describe
+> what the value represents — the sum of savings amounts actually distributed
+> across stocks by the current allocation result — since the application has
+> not executed an actual investment. This is a presentation-only rename: the
+> REST API's `invested` field, the underlying calculation, and every other
+> behavior this task established are unchanged.
+
 ## Goal
 
 Implement the user interface for explicitly calculating and displaying the temporary investment allocation for the currently active Watchlist.

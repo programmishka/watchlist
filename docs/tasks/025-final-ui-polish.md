@@ -4,6 +4,19 @@
 
 Done
 
+> **Table-overflow acceptance revised by TASK-034.** This task accepted
+> horizontal table scrolling as an unremarkable outcome on any viewport,
+> including desktop, once all ten columns exceeded the content width (see the
+> "Viewport strategy confirmed" note below). TASK-034 revises this
+> acceptance: on a sufficiently wide desktop viewport, horizontal table
+> scrolling is now a fallback for constrained width, not the preferred wide-
+> desktop behavior — achieved by widening the page's usable width and using
+> content-aware column widths so the normal deterministic fixture fits
+> without scrolling at 1600px. The 375px/768px/1280px viewport strategy and
+> the rest of this task's visual-language conventions (CSS custom properties,
+> `.btn`/`.field-input`/status/empty-state vocabulary) remain unchanged and
+> are reused by TASK-034 rather than replaced.
+
 ## Goal
 
 Perform the final V1 UI quality pass over the complete Watchlist application.

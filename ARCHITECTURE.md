@@ -846,6 +846,19 @@ A dedicated mobile representation or selective column hiding may be
 considered as a future improvement if horizontal scrolling proves
 insufficient.
 
+**Table-overflow strategy evolution (TASK-034, refining the above and
+superseding TASK-025's acceptance that desktop scrolling was unremarkable):**
+
+> Horizontal table scrolling is the fallback for constrained viewport width,
+> not the preferred behavior on a sufficiently wide desktop display.
+
+The table container's horizontal-scroll mechanism itself is unchanged and
+still required for tablet/mobile viewports and exceptional content (e.g. an
+unusually long company name). What changed is that the page and table are
+now sized so the normal, deterministic column set fits within a wide desktop
+viewport without needing that fallback at all. See §14.4 and §26.11 for the
+concrete strategy.
+
 ### 14.3 Accessibility
 
 Interactive controls must remain keyboard-accessible and usable across
@@ -854,6 +867,38 @@ supported viewport sizes.
 For complex interactive controls such as modal confirmation dialogs,
 prefer native platform capabilities or accessible Svelte-native headless
 components over implementing accessibility behavior from scratch.
+
+### 14.4 Compact Data-First Workspace (TASK-034)
+
+The Watchlist UI is a data-first financial workspace: the stock table is the
+primary working surface, and controls exist to manipulate or inspect it, not
+to dominate the viewport. Controls are kept compact and content-aware (sized
+for their expected input, e.g. a ticker symbol vs. a company-name search
+term) so the table receives layout priority rather than being squeezed into
+whatever space forms and management chrome leave behind.
+
+The responsive strategy by viewport class:
+
+```text
+wide desktop
+→ compact, mostly-horizontal controls in one toolbar row
+→ the table normally fits without horizontal scrolling
+
+medium/tablet
+→ toolbar controls wrap into logical groups across more than one row
+→ the table may still need to scroll internally
+
+mobile
+→ toolbar controls stack, each remaining independently reachable
+→ the table always scrolls internally
+→ the page itself never scrolls horizontally
+```
+
+This is achieved without a new breakpoint system (§14.1 still applies): the
+page's usable width, the toolbar's flex-based grouping, and the table's
+column widths (§26.11) all respond continuously to available space rather
+than switching behavior at fixed pixel thresholds, with 375/768/1280/1600px
+used only as representative verification widths.
 
 ## 15. Market Data
 
@@ -1271,6 +1316,13 @@ invested <= totalSavings
 
 Any remainder is intentionally left undistributed.
 
+**UI terminology (TASK-034):** the UI presents this value under the label
+`Allocated savings` rather than `Invested`, since the application has not
+executed an actual investment — the label was potentially misleading. This
+is a presentation-only rename: the REST field name (`invested`), the
+formula above, and the client model type are unchanged; only the rendered
+UI text differs from the field name it displays.
+
 ### 22.6 Persistence
 
 The following values are NOT persisted:
@@ -1623,6 +1675,91 @@ filtering is in effect even when it changes nothing visible). Singular/
 plural wording for Total and Filtered are computed independently. This is
 the same underlying derived counts and active-filter rule as before
 (§13.3, §26.5) — only the rendered text changed.
+
+### 26.11 Compact Responsive Workspace (TASK-034)
+
+TASK-034 is a layout/interaction refinement of the shell established in
+§26.1-§26.10. It introduces no new business behavior, API call, or piece of
+client-side state beyond what those sections already describe; it changes
+where and how the existing controls are presented so the stock table (§13,
+§14.4) receives layout priority.
+
+**Duplicate Watchlist name removed.** The active Watchlist name was
+previously shown both by the active tab and by a standalone `<h2>` heading
+above the table. The heading is removed; the active tab (`aria-selected`,
+§26.1) remains the sole workspace identification.
+
+**Watchlist creation moved into the tab row.** The Watchlist-name input and
+create button (§26.2) now share one flex row with `WatchlistTabs` instead of
+occupying a separate full-width row above it. The tab strip takes the
+flexible remaining width (scrolling internally when many Watchlists exist,
+per its existing §26.1 mechanism) while the create form keeps a fixed,
+moderate width, so a long tab strip cannot push Watchlist creation off the
+page.
+
+**Active-tab delete control.** The separate, large "Delete current
+watchlist" button is removed. `WatchlistTabs.svelte` now renders a compact
+`×` delete control next to the active tab only, with an accessible name of
+the form `Remove watchlist "<name>"` using the real active Watchlist name.
+Because a `<button>` cannot contain another interactive `<button>`, and
+nesting one inside the `role="tab"` button would also make a delete click
+select the tab, the tab button and the delete button are rendered as
+sibling elements inside a small non-semantic wrapper, preserving
+`tablist`/`tab`/`aria-selected` semantics (§26.1) rather than nesting
+incorrectly. `+page.svelte`'s existing deletion orchestration — the
+`window.confirm()` dialog (§26.2), `managementBusy` gating, and the
+transition to the server-selected replacement Watchlist — is unchanged; only
+which markup triggers it changed. With no Watchlists, `WatchlistTabs` itself
+is not rendered, so no delete control exists, with no extra conditional
+needed beyond the existing one.
+
+**Consolidated workspace toolbar.** The stock-add form (§26.3), the
+company-name filter (§26.5), and the investment-allocation form (§26.7)
+previously occupied separate rows/sections above the table. They now share
+one flex-wrap toolbar row, grouped into three logical clusters — stock
+mutation, table presentation, allocation — distinguished by spacing rather
+than borders (§14.4). The filter and allocation clusters are only rendered
+once the active Watchlist has at least one stock (matching their existing
+preconditions, §26.5/§26.7); the stock-add cluster remains available
+regardless, so a first stock can still be added to an empty Watchlist. None
+of the underlying mutation handlers, validation, or busy-state logic
+changed — only their shared container and visual grouping.
+
+Each input's visible `<label>` is now visually hidden (a standard
+"screen-reader-only" utility class, clipped but not `display:none`/
+`aria-hidden`) with a `placeholder` attribute supplying the same text as a
+compact visual affordance instead. The label element itself is unchanged
+and remains part of the accessibility tree and available to label-based
+lookups, so this is a visual-density change only, not an accessibility
+regression (§14.3).
+
+**Allocated savings terminology.** See §22.5.
+
+**Wider desktop page.** The page container's width strategy changed from a
+fixed `max-width` centered on a narrow content column to
+`width: min(calc(100% - 2rem), 1600px)`, substantially increasing usable
+width on wide displays while still capping at a sane maximum and leaving a
+small inset on narrower ones.
+
+**Content-aware table column widths.** `WatchlistTable.svelte` now uses
+`table-layout: fixed` with an explicit `<colgroup>`: every column except
+Name has an explicit width sized for its formatted content (e.g. a compact
+width for Symbol/Currency/Price, a wider one for Target Price to
+accommodate its editable input); Name has no explicit width and therefore
+receives the remaining space, per the `table-layout: fixed` column-width
+algorithm. This is what allows the normal deterministic stock set to fit a
+wide desktop viewport without horizontal scrolling (§14.2) while still
+scrolling internally on narrower viewports, per the same
+`table-container`/`overflow-x` mechanism as before. Header labels
+(`white-space: normal`) wrap onto multiple lines rather than truncating
+when a header's text is longer than its column, so a compact column never
+hides its own header text; the same is true of the Symbol/Name cells for
+unusually long values, wrapping rather than clipping.
+
+**Compact row actions.** The per-row stock-removal control (§26.3) changed
+from a `Delete`-labeled button to a compact icon-only button (a trash-can
+glyph), keeping its existing accessible name (`Remove <symbol>`) and
+no-confirmation removal semantics unchanged.
 
 ---
 

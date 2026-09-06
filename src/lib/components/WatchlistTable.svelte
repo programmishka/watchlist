@@ -73,6 +73,18 @@
 
 <div class="table-container">
 	<table>
+		<colgroup>
+			<col class="col-symbol" />
+			<col class="col-name" />
+			<col class="col-market-cap" />
+			<col class="col-price" />
+			<col class="col-currency" />
+			<col class="col-dividend-yield" />
+			<col class="col-target-price" />
+			<col class="col-distance" />
+			<col class="col-savings" />
+			<col class="col-actions" />
+		</colgroup>
 		<thead>
 			<tr>
 				{#each SORTABLE_COLUMNS as column (column.key)}
@@ -104,7 +116,7 @@
 			{#each stocks as stock (stock.symbol)}
 				{@const distanceState = distanceStateFor(stock.distanceToTarget)}
 				<tr>
-					<td>{stock.symbol}</td>
+					<td class="symbol">{stock.symbol}</td>
 					<td class="name">{stock.name ?? MISSING_VALUE_PLACEHOLDER}</td>
 					<td class="numeric">{formatNumber(stock.marketCapBillionsUsd)}</td>
 					<td class="numeric">{formatNumber(stock.price)}</td>
@@ -124,16 +136,16 @@
 					<td class="numeric">
 						{formatWholeEuro(allocationBySymbol?.get(stock.symbol)?.savingsAmount)}
 					</td>
-					<td>
+					<td class="actions">
 						<button
 							type="button"
-							class="btn btn-destructive btn-compact"
+							class="btn btn-destructive btn-icon"
 							aria-label={`Remove ${stock.symbol}`}
 							aria-busy={busy}
 							disabled={busy}
 							onclick={() => onRemove(stock.symbol)}
 						>
-							Delete
+							🗑
 						</button>
 					</td>
 				</tr>
@@ -149,8 +161,59 @@
 
 	table {
 		width: 100%;
-		min-width: 720px;
+		/* Content-aware column widths (TASK-034 §42-45): every column besides
+		   Name has an explicit width below; table-layout: fixed hands Name the
+		   remaining space instead of every column expanding proportionally.
+		   The min-width is the sum of the explicit column widths plus a modest
+		   floor for Name, so mobile/tablet still overflow into the container's
+		   horizontal scroll (§39-41) while a wide desktop table gets most of
+		   the page's width with no scrolling required. */
+		min-width: 68rem;
+		table-layout: fixed;
 		border-collapse: collapse;
+	}
+
+	.col-symbol {
+		/* Wide enough that common exchange-suffixed symbols (SAP.DE, GAW.L,
+		   HEXA-B.ST) render on one line rather than wrapping mid-word. */
+		width: 7rem;
+	}
+
+	.col-market-cap {
+		width: 7rem;
+	}
+
+	.col-price {
+		width: 6rem;
+	}
+
+	.col-currency {
+		/* Wide enough for the "Currency" header label itself (an unbreakable
+		   single word) at this font size/weight, not just the short data
+		   values (USD, GBp, CHF, ...) the column normally holds. */
+		width: 6.5rem;
+	}
+
+	.col-dividend-yield {
+		width: 6rem;
+	}
+
+	.col-target-price {
+		width: 8rem;
+	}
+
+	.col-distance {
+		width: 6.5rem;
+	}
+
+	.col-savings {
+		width: 5.5rem;
+	}
+
+	.col-actions {
+		/* Wide enough for the "Actions" header label itself (an unbreakable
+		   single word), not just the small icon button the column holds. */
+		width: 5rem;
 	}
 
 	th,
@@ -158,20 +221,42 @@
 		padding: 0.5rem 0.75rem;
 		text-align: left;
 		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	td.name {
 		white-space: normal;
-		min-width: 10rem;
-		max-width: 20rem;
 		word-break: break-word;
+		overflow-wrap: break-word;
+	}
+
+	/* Symbols can exceed the compact column width (e.g. exchange-suffixed
+	   "HEXA-B.ST"); wrap rather than clip so the full symbol stays visible,
+	   never hidden text under an ellipsis (unlike the other compact columns,
+	   whose formatted values have a bounded, predictable length). */
+	td.symbol {
+		white-space: normal;
+		overflow-wrap: break-word;
+		overflow: visible;
 	}
 
 	td.target-price-cell {
 		white-space: normal;
+		overflow: visible;
+		padding-inline: 0.4rem;
+	}
+
+	td.actions {
+		text-align: center;
+		padding-inline: 0.4rem;
 	}
 
 	thead th {
+		/* Column widths are sized for the formatted data, not the (often
+		   longer) header label; headers wrap instead of clipping. */
+		white-space: normal;
+		overflow: visible;
 		border-bottom: 2px solid #d0d0d0;
 		background: #f7f7f8;
 		font-weight: 600;
@@ -215,6 +300,13 @@
 		font-weight: 600;
 		color: inherit;
 		cursor: pointer;
+		/* A flex container's text content defaults to a `min-width: auto`
+		   (max-content) floor and won't wrap otherwise, even though the
+		   ancestor `<th>` allows it (TASK-034 §42-45 compact header columns
+		   like "Market Cap (USD bn)" need to wrap onto multiple lines). */
+		min-width: 0;
+		white-space: normal;
+		text-align: left;
 	}
 
 	.sort-button:hover {

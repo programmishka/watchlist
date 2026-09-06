@@ -151,3 +151,29 @@ body {
 .filtered-empty {
 	font-style: italic;
 }
+
+/* Visually hidden but still accessible label text (TASK-034 §62): compact
+   toolbar controls show a placeholder for visual affordance while the real
+   <label> stays available to assistive technology and `getByLabel`. */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+/* Compact square icon buttons (TASK-034 §12, §48): the active-tab delete
+   control and the per-row stock-remove action. Deliberately smaller than
+   `.btn-compact` because they carry a single glyph, not a text label. */
+.btn-icon {
+	min-height: 1.85rem;
+	min-width: 1.85rem;
+	padding: 0.2rem 0.4rem;
+	font-size: 0.95rem;
+	line-height: 1;
+}
