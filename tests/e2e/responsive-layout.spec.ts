@@ -35,10 +35,10 @@ test.describe('Responsive layout', () => {
 		for (const header of [
 			'Symbol',
 			'Name',
-			'Cap (USD)',
+			'Market Cap (USD bn)',
 			'Price',
-			'Div',
 			'Currency',
+			'Dividend Yield',
 			'Target Price',
 			'Distance to Target'
 		]) {
@@ -70,6 +70,15 @@ test.describe('Responsive layout', () => {
 		await expect(page.getByRole('table')).toBeVisible();
 
 		expect(await pageOverflowsHorizontally(page)).toBe(false);
+
+		// Distance-to-Target highlighting and the count footer remain visible
+		// and reachable on mobile (TASK-033 §85), not just on desktop.
+		const sapRow = page.getByRole('table').locator('tbody tr').filter({ hasText: 'SAP.DE' });
+		const distanceCell = sapRow.getByRole('cell').nth(7);
+		await distanceCell.scrollIntoViewIfNeeded();
+		await expect(distanceCell).toBeVisible();
+		await expect(distanceCell).toHaveClass(/distance-unfavorable/);
+		await expect(page.getByText('Total: 4 stocks')).toBeVisible();
 	});
 
 	test('mobile viewport makes the table container horizontally scrollable', async ({

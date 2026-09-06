@@ -53,19 +53,31 @@ describe('filterStocksByCompanyName', () => {
 });
 
 describe('formatStockCount', () => {
+	it('renders a zero total count when unfiltered', () => {
+		expect(formatStockCount(0, 0, false)).toBe('Total: 0 stocks');
+	});
+
 	it('renders singular total count when unfiltered', () => {
-		expect(formatStockCount(1, 1, false)).toBe('1 stock');
+		expect(formatStockCount(1, 1, false)).toBe('Total: 1 stock');
 	});
 
 	it('renders plural total count when unfiltered', () => {
-		expect(formatStockCount(3, 3, false)).toBe('3 stocks');
+		expect(formatStockCount(50, 50, false)).toBe('Total: 50 stocks');
 	});
 
-	it('renders filtered and total count when filtered', () => {
-		expect(formatStockCount(3, 1, true)).toBe('1 of 3 stocks');
+	it('renders plural total and plural filtered counts when filtered', () => {
+		expect(formatStockCount(50, 12, true)).toBe('Total: 50 stocks · Filtered: 12 stocks');
 	});
 
-	it('renders zero matches when filtered', () => {
-		expect(formatStockCount(3, 0, true)).toBe('0 of 3 stocks');
+	it('renders singular total and singular filtered counts when filtered', () => {
+		expect(formatStockCount(1, 1, true)).toBe('Total: 1 stock · Filtered: 1 stock');
+	});
+
+	it('renders a singular total with a zero filtered count when filtered', () => {
+		expect(formatStockCount(1, 0, true)).toBe('Total: 1 stock · Filtered: 0 stocks');
+	});
+
+	it('shows the filtered count even when the filter matches every stock', () => {
+		expect(formatStockCount(50, 50, true)).toBe('Total: 50 stocks · Filtered: 50 stocks');
 	});
 });

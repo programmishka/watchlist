@@ -9,6 +9,13 @@
 	--color-danger-bg: #fdeceb;
 	--color-warning: #8a5a00;
 	--color-warning-bg: #fdf3e0;
+	/* Value-oriented Target Price distance presentation (TASK-033 §30-31):
+	   favorable/unfavorable name the investment meaning, not the mathematical
+	   sign, so they can never be confused with generic positive/negative. */
+	--color-distance-favorable: rgb(44, 102, 45);
+	--color-distance-favorable-bg: rgb(252, 255, 245);
+	--color-distance-unfavorable: rgb(159, 58, 56);
+	--color-distance-unfavorable-bg: rgb(255, 246, 246);
 	--radius: 4px;
 }
 

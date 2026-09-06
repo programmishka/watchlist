@@ -4,6 +4,13 @@
 
 Done
 
+> **Superseded in part by TASK-033:** TASK-033 later refined the column
+> labels/order (e.g. `Cap (USD)` -> `Market Cap (USD bn)`, `Div` ->
+> `Dividend Yield`, Currency moved after Price) and numeric presentation
+> (exactly two decimal places) established here. This task's status remains
+> `Done`; see TASK-033 and `ARCHITECTURE.md` §13/§26.10 for the current
+> presentation rules.
+
 ## Goal
 
 Implement the read-only stock table for the currently loaded Watchlist.

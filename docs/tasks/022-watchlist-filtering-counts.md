@@ -4,6 +4,12 @@
 
 Done
 
+> **Superseded in part by TASK-033:** TASK-033 replaced the original compact
+> `N of M stocks` count wording established here with explicit
+> `Total: N stock(s)` / `Filtered: M stock(s)` wording. The underlying
+> filtering behavior and derived-count rules on this page are unchanged; this
+> task's status remains `Done`. See TASK-033 and `ARCHITECTURE.md` §13.3/§26.10.
+
 ## Goal
 
 Implement client-side filtering of the currently active Watchlist by company name and display stock counts below the table.

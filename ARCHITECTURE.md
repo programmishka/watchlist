@@ -694,24 +694,36 @@ If a watchlist contains no symbols, an empty-state message is displayed instead 
 
 The main application component is a stock table.
 
-The table contains:
+The table columns, in their final presentation order (TASK-033, superseding
+TASK-017's original order/labels below), are:
 
-* symbol;
-* name;
-* market cap in billions USD;
-* current price;
-* dividend yield;
-* currency;
-* target price;
-* distance to target;
-* savings amount;
-* delete action.
+1. Symbol;
+2. Name;
+3. `Market Cap (USD bn)`;
+4. Price;
+5. Currency;
+6. `Dividend Yield`;
+7. Target Price;
+8. Distance to Target;
+9. Savings Amount;
+10. `Actions`.
+
+Currency is positioned directly after Price so the price value and its
+quoting currency are visually associated. `Market Cap (USD bn)` and
+`Dividend Yield` replace the original abbreviated `Cap (USD)`/`Div` labels
+to make the unit (billions of USD) and the percentage-yield nature of the
+value explicit. `Actions` replaces the original `Delete` header — the
+row-level remove control is presentationally one action inside that column,
+not the column's own identity. None of this reorders the underlying
+Watchlist symbol order (§9.5) or changes any server-computed value; it is
+presentation only. See §26.10 for the full presentation/formatting rules.
 
 ### 13.1 Sorting
 
 All eight stock-data columns (symbol, name, market cap in billions USD,
-price, dividend yield, currency, target price, distance to target) may be
-sorted through interactive headers. The `Delete` column is not sortable.
+price, currency, dividend yield, target price, distance to target) may be
+sorted through interactive headers, regardless of their display position.
+The `Actions` column is not sortable.
 
 Sorting is a client-side presentation concern operating only on the stock
 data already loaded in the browser; it performs no API request.
@@ -790,10 +802,13 @@ Filtering MUST NOT affect investment allocation.
 
 ### 13.3 Footer
 
-The table footer displays:
-
-* total number of stocks in the current watchlist;
-* number of stocks matching the current filter.
+The table footer displays an explicit `Total: N stock(s)` count of stocks in
+the current Watchlist (TASK-033, superseding TASK-022's original compact
+`N of M stocks` wording), and, only while a company-name filter is active,
+an additional `· Filtered: M stock(s)` count. Both counts pluralize
+independently and are derived directly from `activeView.stocks.length`/
+`filteredStocks.length` (§26.5) — sorting never affects either count. See
+§26.10.
 
 ---
 
@@ -1543,6 +1558,71 @@ TASK-025 introduced no new business behavior; it consolidated the visual languag
 The Stock symbol input (§26.3) uppercases characters live as the user types, via a plain `oninput` handler (`value.toUpperCase()`) rather than `bind:value` — punctuation (`.`/`-`) is preserved unchanged, and trimming/full grammar validation is deliberately deferred to submission rather than applied per keystroke. The normalization/validation rule itself (`normalizeStockSymbol`, `isValidStockSymbol`, `parseStockSymbol`) lives in `src/lib/shared/stockSymbol.ts` — a new pure, dependency-free module (no provider, network, SvelteKit request object, or persistence dependency) importable from both server application code (`AddStockToWatchlistService`) and browser code, deliberately placed outside `$lib/server` so the browser bundle can include it. This avoids maintaining two separate regex definitions that could drift.
 
 `addStockToActiveWatchlist` (`src/lib/client/watchlistShell.ts`) normalizes and validates the trimmed symbol with `parseStockSymbol` before calling the API; a syntactically invalid symbol short-circuits through a new `onInvalidSymbol(normalizedSymbol)` handler instead of `onAdding`/`onAddFailed`/`onAdded` — no request is sent. `+page.svelte` uses this to redisplay the normalized (uppercased) text in the input for correction and show a local validation message (`INVALID_STOCK_SYMBOL_MESSAGE`, exported alongside), taking precedence over any previous server-reported mutation error. This client check is a UX optimization only (§28 of the task) — the server independently normalizes and validates every request regardless of what the browser sent, so a direct/bypassing API request receives the same `INVALID_STOCK_SYMBOL` rejection.
+
+### 26.10 Table Presentation Refinements (TASK-033)
+
+TASK-033 changed only client-side presentation of the already-composed
+Watchlist stock data (§13, §13.3): column labels/order, decimal
+formatting, a signed/highlighted Distance-to-Target presentation, and the
+footer wording. It introduced no new business calculation, no client-side
+recomputation of a server-owned formula, no API change, and no persistence
+change.
+
+**Numeric formatting.** `formatNumber`/`formatPercentage`
+(`src/lib/client/format.ts`) now always render exactly two decimal places
+(`minimumFractionDigits`/`maximumFractionDigits: 2`), covering Market Cap,
+Price, and Dividend Yield. `formatNumber` and `formatPercentage` continue to
+render `undefined` as the `—` placeholder and a real `0` as `0.00`/`0.00%`
+respectively (§21.1, §24.6) — this task additionally hardens both against
+non-finite (`NaN`, `Infinity`, `-Infinity`) input, treating it the same as
+`undefined` rather than risking a misleading formatted string. Savings
+Amount is intentionally excluded from this two-decimal rule: `formatWholeEuro`
+(§26.7) keeps its existing whole-Euro presentation, because the underlying
+`savingsAmount` value is itself always a whole number (§22.4) and formatting
+it with decimals would misrepresent that.
+
+**Signed Distance to Target.** A new `formatSignedPercentage` renders an
+explicit `+` for a positive distance, keeps the natural `-` for a negative
+distance, and — unlike the generic percentage formatter — renders a real
+zero distance neutrally as `0.00%` rather than `+0.00%`
+(`Intl.NumberFormat`'s `signDisplay: 'exceptZero'`). It is used only for the
+Distance-to-Target cell; Dividend Yield continues to use the unsigned
+`formatPercentage`, since a forced sign is meaningful only for a
+value-oriented distance, not a yield.
+
+**Distance-to-Target visual states.** `WatchlistTable.svelte` classifies
+each row's Distance-to-Target cell into one of three presentation states,
+intentionally named for investment meaning rather than mathematical sign so
+the CSS vocabulary can't be misread as generic positive/negative:
+
+```text
+distanceToTarget < 0   -> "favorable"   (market price below Target Price)
+distanceToTarget > 0   -> "unfavorable" (market price above Target Price)
+distanceToTarget = 0   -> neutral (real equal-price result)
+distanceToTarget = undefined -> neutral (no calculable value)
+```
+
+Two new global CSS custom properties per state
+(`--color-distance-favorable`/`-bg`, `--color-distance-unfavorable`/`-bg` in
+`src/app.css`, following the existing TASK-025 token convention) supply the
+colors. The resulting class is applied only to the Distance-to-Target `<td>`
+— never the surrounding `<tr>` and never any other financial column (Price,
+Target Price, Dividend Yield, Savings Amount, Market Cap) — because the
+visual statement is specific to the price/Target-Price relationship. The
+explicit `+`/`-` sign remains the accessible, non-color-dependent source of
+the same information; no icon or changed accessible name was introduced, and
+the underlying numeric value/`aria`-relevant text never uses subjective
+language (e.g. "good"/"bad"/"buy"/"sell") — the application remains a
+decision aid, not a trading recommendation.
+
+**Footer wording.** `formatStockCount` (§26.5) was reworded from the
+original compact `N of M stocks` form to an explicit `Total: N stock(s)`,
+plus `· Filtered: M stock(s)` whenever a company-name filter is active
+(including when the filter matches every stock, so the UI communicates that
+filtering is in effect even when it changes nothing visible). Singular/
+plural wording for Total and Filtered are computed independently. This is
+the same underlying derived counts and active-filter rule as before
+(§13.3, §26.5) — only the rendered text changed.
 
 ---
 

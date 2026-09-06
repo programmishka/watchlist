@@ -202,7 +202,7 @@ test.describe('Target Price editing', () => {
 
 		await expect(input).toHaveValue('250');
 		const aaplRow = page.getByRole('table').locator('tbody tr').filter({ hasText: 'AAPL' });
-		await expect(aaplRow.getByRole('cell').nth(7)).toContainText('-10%');
+		await expect(aaplRow.getByRole('cell').nth(7)).toContainText('-10.00%');
 
 		// Row isolation: the other row is untouched.
 		await expect(page.getByLabel('Target price for SAP.DE')).toHaveValue('150');

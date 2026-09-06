@@ -238,7 +238,7 @@ test.describe('Watchlist table sorting', () => {
 		await sortButton(page, 'Price').click();
 
 		expect(await symbolColumn(page)).toEqual(['MSFT', 'GAW.L']);
-		await expect(page.getByText('2 of 5 stocks')).toBeVisible();
+		await expect(page.getByText('Total: 5 stocks · Filtered: 2 stocks')).toBeVisible();
 	});
 
 	test('keeps the active sort applied as the filtered subset changes', async ({ page }) => {
@@ -512,14 +512,14 @@ test.describe('Watchlist table sorting', () => {
 		expect(apiRequests).toHaveLength(0);
 	});
 
-	test('Delete header has no sort control and no sort semantics', async ({ page }) => {
+	test('Actions header has no sort control and no sort semantics', async ({ page }) => {
 		await mockSingleWatchlist(page, API_ORDER);
 		await page.goto('/');
 
-		const deleteHeader = page.getByRole('columnheader', { name: 'Delete', exact: true });
-		await expect(deleteHeader).toBeVisible();
-		await expect(deleteHeader.getByRole('button')).toHaveCount(0);
-		await expect(deleteHeader).not.toHaveAttribute('aria-sort');
+		const actionsHeader = page.getByRole('columnheader', { name: 'Actions', exact: true });
+		await expect(actionsHeader).toBeVisible();
+		await expect(actionsHeader.getByRole('button')).toHaveCount(0);
+		await expect(actionsHeader).not.toHaveAttribute('aria-sort');
 	});
 
 	test('mobile layout allows sorting without page overflow', async ({ page }, testInfo) => {

@@ -21,17 +21,18 @@ function pluralizeStocks(count: number): string {
 }
 
 /**
- * Renders the count footer text (TASK-022 §26-29). Pluralization follows
- * `totalCount` in both the unfiltered and filtered representation.
+ * Renders the count footer text (TASK-022 §26-29, reworded by TASK-033
+ * §39-47 for explicit `Total`/`Filtered` wording). Total and Filtered are
+ * pluralized independently of each other.
  */
 export function formatStockCount(
 	totalCount: number,
 	filteredCount: number,
 	isFiltered: boolean
 ): string {
-	const label = pluralizeStocks(totalCount);
+	const totalText = `Total: ${totalCount} ${pluralizeStocks(totalCount)}`;
 	if (!isFiltered) {
-		return `${totalCount} ${label}`;
+		return totalText;
 	}
-	return `${filteredCount} of ${totalCount} ${label}`;
+	return `${totalText} · Filtered: ${filteredCount} ${pluralizeStocks(filteredCount)}`;
 }

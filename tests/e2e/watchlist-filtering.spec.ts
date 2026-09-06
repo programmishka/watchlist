@@ -38,7 +38,7 @@ test.describe('Watchlist filtering', () => {
 		await page.goto('/');
 
 		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(4);
-		await expect(page.getByText('4 stocks')).toBeVisible();
+		await expect(page.getByText('Total: 4 stocks')).toBeVisible();
 	});
 
 	test('filters immediately on a company-name substring without a submit action', async ({
@@ -52,7 +52,7 @@ test.describe('Watchlist filtering', () => {
 		const rows = page.getByRole('table').locator('tbody tr');
 		await expect(rows).toHaveCount(1);
 		await expect(rows.nth(0)).toContainText('GAW.L');
-		await expect(page.getByText('1 of 4 stocks')).toBeVisible();
+		await expect(page.getByText('Total: 4 stocks · Filtered: 1 stock')).toBeVisible();
 	});
 
 	test('matches case-insensitively', async ({ page }) => {
@@ -90,7 +90,7 @@ test.describe('Watchlist filtering', () => {
 		await input.fill('');
 
 		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(4);
-		await expect(page.getByText('4 stocks')).toBeVisible();
+		await expect(page.getByText('Total: 4 stocks')).toBeVisible();
 	});
 
 	test('shows an explicit no-match state and a zero count instead of the empty-watchlist message', async ({
@@ -104,7 +104,7 @@ test.describe('Watchlist filtering', () => {
 		await expect(page.getByText('No stocks match the current filter.')).toBeVisible();
 		await expect(page.getByText('This watchlist is empty.')).toHaveCount(0);
 		await expect(page.getByRole('table')).toHaveCount(0);
-		await expect(page.getByText('0 of 4 stocks')).toBeVisible();
+		await expect(page.getByText('Total: 4 stocks · Filtered: 0 stocks')).toBeVisible();
 	});
 
 	test('a missing-name stock is visible without a filter but never matches a non-empty filter', async ({
@@ -161,7 +161,7 @@ test.describe('Watchlist filtering', () => {
 
 		await expect(filterInput(page)).toHaveValue('');
 		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
-		await expect(page.getByText('1 stock', { exact: true })).toBeVisible();
+		await expect(page.getByText('Total: 1 stock', { exact: true })).toBeVisible();
 	});
 
 	test('starts with an empty filter after creating a new watchlist', async ({ page }) => {
@@ -277,7 +277,7 @@ test.describe('Watchlist filtering', () => {
 		const rows = page.getByRole('table').locator('tbody tr');
 		await expect(rows).toHaveCount(1);
 		await expect(rows.nth(0)).toContainText('GAW.L');
-		await expect(page.getByText('1 of 2 stocks')).toBeVisible();
+		await expect(page.getByText('Total: 2 stocks · Filtered: 1 stock')).toBeVisible();
 	});
 
 	test('shows the filtered-empty state and updated counts after removing the only matching stock', async ({
@@ -299,7 +299,9 @@ test.describe('Watchlist filtering', () => {
 
 		await expect(filterInput(page)).toHaveValue('SAP');
 		await expect(page.getByText('No stocks match the current filter.')).toBeVisible();
-		await expect(page.getByText('0 of 1 stock', { exact: true })).toBeVisible();
+		await expect(
+			page.getByText('Total: 1 stock · Filtered: 0 stocks', { exact: true })
+		).toBeVisible();
 	});
 
 	test('mobile layout keeps the filter reachable, readable, and free of page overflow', async ({
@@ -316,7 +318,7 @@ test.describe('Watchlist filtering', () => {
 		await input.fill('shop');
 
 		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
-		await expect(page.getByText('1 of 4 stocks')).toBeVisible();
+		await expect(page.getByText('Total: 4 stocks · Filtered: 1 stock')).toBeVisible();
 
 		const overflows = await page.evaluate(
 			() => document.documentElement.scrollWidth > document.documentElement.clientWidth

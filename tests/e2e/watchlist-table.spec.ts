@@ -14,14 +14,14 @@ const WATCHLIST_ID = 'wl-1';
 const EXPECTED_COLUMNS = [
 	'Symbol',
 	'Name',
-	'Cap (USD)',
+	'Market Cap (USD bn)',
 	'Price',
-	'Div',
 	'Currency',
+	'Dividend Yield',
 	'Target Price',
 	'Distance to Target',
 	'Savings Amount',
-	'Delete'
+	'Actions'
 ];
 
 async function mockSingleWatchlist(page: Page, stocks: WatchlistStock[]): Promise<void> {
@@ -71,7 +71,7 @@ test.describe('Watchlist table', () => {
 		await page.goto('/');
 
 		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'GAW.L' });
-		const currencyCell = row.getByRole('cell').nth(5);
+		const currencyCell = row.getByRole('cell').nth(4);
 		await expect(currencyCell).toHaveText('GBp');
 		await expect(currencyCell).not.toHaveText('GBP');
 	});
@@ -86,7 +86,7 @@ test.describe('Watchlist table', () => {
 		await expect(cells.nth(1)).toHaveText('—'); // name
 		await expect(cells.nth(2)).toHaveText('—'); // market cap
 		await expect(cells.nth(3)).toHaveText('—'); // price
-		await expect(cells.nth(5)).toHaveText('—'); // currency
+		await expect(cells.nth(4)).toHaveText('—'); // currency
 		await expect(page.getByLabel('Target price for UNKNOWN')).toHaveValue('100'); // target price still present
 		await expect(cells.nth(7)).toHaveText('—'); // distance to target: unavailable, never a fabricated 0% (TASK-031)
 	});
@@ -123,7 +123,7 @@ test.describe('Watchlist table', () => {
 		await expect(distanceCell).not.toContainText('%');
 	});
 
-	test('displays a real zero Target Price distance as 0%, not the missing-value placeholder', async ({
+	test('displays a real zero Target Price distance as 0.00%, not the missing-value placeholder', async ({
 		page
 	}) => {
 		await mockSingleWatchlist(page, [EQUAL_PRICE_TARGET_STOCK]);
@@ -131,7 +131,75 @@ test.describe('Watchlist table', () => {
 
 		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'EQUAL' });
 		const distanceCell = row.getByRole('cell').nth(7);
-		await expect(distanceCell).toHaveText('0%');
+		await expect(distanceCell).toHaveText('0.00%');
 		await expect(distanceCell).not.toHaveText('—');
+		await expect(distanceCell).not.toHaveClass(/distance-favorable|distance-unfavorable/);
+	});
+
+	test('formats representative numbers with exactly two decimal places (TASK-033)', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, [SAP_DE_STOCK]);
+		await page.goto('/');
+
+		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'SAP.DE' });
+		const cells = row.getByRole('cell');
+		await expect(cells.nth(2)).toHaveText('180.00'); // market cap
+		await expect(cells.nth(3)).toHaveText('180.50'); // price
+	});
+
+	test('formats Dividend Yield with a trailing zero to exactly two decimal places (TASK-033)', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, [SAP_DE_STOCK]);
+		await page.goto('/');
+
+		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'SAP.DE' });
+		await expect(row.getByRole('cell').nth(5)).toHaveText('3.20%');
+	});
+
+	test('applies favorable presentation and an explicit sign to a negative Distance to Target', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, [GAW_L_STOCK]);
+		await page.goto('/');
+
+		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'GAW.L' });
+		const distanceCell = row.getByRole('cell').nth(7);
+		await expect(distanceCell).toContainText('-');
+		await expect(distanceCell).toHaveClass(/distance-favorable/);
+		await expect(row).not.toHaveClass(/distance-favorable/);
+	});
+
+	test('applies unfavorable presentation and an explicit + sign to a positive Distance to Target', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, [SAP_DE_STOCK]);
+		await page.goto('/');
+
+		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'SAP.DE' });
+		const distanceCell = row.getByRole('cell').nth(7);
+		await expect(distanceCell).toContainText('+');
+		await expect(distanceCell).toHaveClass(/distance-unfavorable/);
+		await expect(row).not.toHaveClass(/distance-unfavorable/);
+	});
+
+	test('missing Distance to Target has neutral presentation, no favorable/unfavorable class', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, [UNKNOWN_STOCK]);
+		await page.goto('/');
+
+		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'UNKNOWN' });
+		const distanceCell = row.getByRole('cell').nth(7);
+		await expect(distanceCell).toHaveText('—');
+		await expect(distanceCell).not.toHaveClass(/distance-favorable|distance-unfavorable/);
+	});
+
+	test('renders the new Total footer wording without an active filter', async ({ page }) => {
+		await mockSingleWatchlist(page, [SAP_DE_STOCK, AAPL_STOCK]);
+		await page.goto('/');
+
+		await expect(page.getByText('Total: 2 stocks')).toBeVisible();
 	});
 });
