@@ -69,7 +69,9 @@ test.describe('Watchlist management', () => {
 		await page.getByRole('button', { name: 'Add watchlist' }).click();
 
 		expect(createCalls.calls).toEqual(['Dividend']);
-		await expect(page.getByRole('tab', { name: 'Main' })).toBeVisible();
+		// "Main" remains a direct tab on desktop, or moves into the responsive
+		// overflow menu on mobile (TASK-035) — either way, the important
+		// guarantee here is that the newly created watchlist becomes active.
 		await expect(page.getByRole('tab', { name: 'Dividend' })).toHaveAttribute(
 			'aria-selected',
 			'true'
@@ -80,7 +82,15 @@ test.describe('Watchlist management', () => {
 
 	test('allows duplicate watchlist names distinguished by the server-selected active id', async ({
 		page
-	}) => {
+	}, testInfo) => {
+		// Both tabs fit directly at desktop capacity (TASK-035); the mobile
+		// case (only the active tab directly visible) is covered by the
+		// "Responsive watchlist navigation" duplicate-name overflow test.
+		test.skip(
+			testInfo.project.name !== 'chromium-desktop',
+			'desktop-only: both tabs directly visible'
+		);
+
 		await mockWatchlistsMetadata(page, {
 			activeWatchlistId: 'wl-1',
 			watchlists: [{ id: 'wl-1', name: 'Dividend' }]

@@ -4,6 +4,10 @@
 
 Done
 
+## Historical Note (TASK-035)
+
+TASK-035 later evolved this task's horizontally scrollable Watchlist tab strip into responsive direct-tab-plus-overflow navigation, while preserving the active-Watchlist semantics (server-authoritative selection, `id`-based tab identity, duplicate-name handling) established here. See `ARCHITECTURE.md` §14.5 and §26.12.
+
 ## Goal
 
 Implement the first production Svelte UI for the Watchlist application.

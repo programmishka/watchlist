@@ -107,9 +107,14 @@ test.describe('Responsive layout', () => {
 		expect(scrollWidth).toBeGreaterThan(clientWidth);
 	});
 
-	test('tabs remain usable on mobile without causing page overflow', async ({ page }, testInfo) => {
+	test('mobile navigation shows only the active watchlist directly, others via disclosure', async ({
+		page
+	}, testInfo) => {
 		test.skip(testInfo.project.name !== 'chromium-mobile', 'mobile-only assertion');
 
+		// Mobile direct-tab capacity is 1 (TASK-035 §11, §27-29): the tab strip
+		// is no longer a horizontally scrollable row of many tabs; inactive
+		// watchlists move into the "Watchlists ▾" overflow disclosure instead.
 		const watchlists = [
 			{ id: 'wl-1', name: 'Main' },
 			{ id: 'wl-2', name: 'Dividend' },
@@ -127,7 +132,127 @@ test.describe('Responsive layout', () => {
 
 		await page.goto('/');
 
-		await expect(page.getByRole('tab', { name: 'Speculative' })).toBeVisible();
+		await expect(page.getByRole('tab', { name: 'Main' })).toHaveAttribute('aria-selected', 'true');
+		await expect(page.getByRole('tab')).toHaveCount(1);
+		await expect(page.getByRole('tab', { name: 'Speculative' })).toHaveCount(0);
+
+		const overflowToggle = page.getByRole('button', { name: 'Watchlists' });
+		await expect(overflowToggle).toBeVisible();
+		await overflowToggle.click();
+		await expect(page.getByRole('button', { name: 'Speculative', exact: true })).toBeVisible();
+
 		expect(await pageOverflowsHorizontally(page)).toBe(false);
+	});
+
+	test('many watchlists produce a bounded, non-scrolling navigation strip at 768px', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'chromium-desktop', 'run once, not per-project');
+		await page.setViewportSize({ width: 768, height: 1000 });
+
+		const watchlists = Array.from({ length: 10 }, (_, index) => ({
+			id: `wl-${index + 1}`,
+			name: `List ${index + 1}`
+		}));
+		await mockWatchlistsMetadata(page, { activeWatchlistId: 'wl-1', watchlists });
+		await mockWatchlistView(page, 'wl-1', {
+			id: 'wl-1',
+			name: 'List 1',
+			stocks: STOCKS,
+			warnings: []
+		});
+
+		await page.goto('/');
+
+		await expect(page.getByRole('tab', { name: 'List 1' })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+		await expect(page.getByRole('button', { name: /^More|^Watchlists/ })).toBeVisible();
+		expect(await pageOverflowsHorizontally(page)).toBe(false);
+
+		const navigationScroll = await page.evaluate(() => {
+			const nav = document.querySelector('[role="tablist"]')?.parentElement;
+			return { scrollWidth: nav?.scrollWidth ?? 0, clientWidth: nav?.clientWidth ?? 0 };
+		});
+		expect(navigationScroll.scrollWidth).toBeLessThanOrEqual(navigationScroll.clientWidth + 1);
+	});
+
+	test('many watchlists produce a bounded, non-scrolling navigation strip at 1600px', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'chromium-desktop', 'run once, not per-project');
+		await page.setViewportSize({ width: 1600, height: 900 });
+
+		const watchlists = Array.from({ length: 13 }, (_, index) => ({
+			id: `wl-${index + 1}`,
+			name: `List ${index + 1}`
+		}));
+		await mockWatchlistsMetadata(page, { activeWatchlistId: 'wl-1', watchlists });
+		await mockWatchlistView(page, 'wl-1', {
+			id: 'wl-1',
+			name: 'List 1',
+			stocks: STOCKS,
+			warnings: []
+		});
+
+		await page.goto('/');
+
+		await expect(page.getByRole('tab', { name: 'List 1' })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+		await expect(page.getByLabel('Watchlist name')).toBeVisible();
+		await expect(page.getByRole('button', { name: /^More|^Watchlists/ })).toBeVisible();
+		expect(await pageOverflowsHorizontally(page)).toBe(false);
+
+		const navigationScroll = await page.evaluate(() => {
+			const nav = document.querySelector('[role="tablist"]')?.parentElement;
+			return { scrollWidth: nav?.scrollWidth ?? 0, clientWidth: nav?.clientWidth ?? 0 };
+		});
+		expect(navigationScroll.scrollWidth).toBeLessThanOrEqual(navigationScroll.clientWidth + 1);
+	});
+
+	test('resizing the viewport recomputes navigation capacity without any additional server request', async ({
+		page
+	}, testInfo) => {
+		test.skip(testInfo.project.name !== 'chromium-desktop', 'run once, not per-project');
+
+		const watchlists = Array.from({ length: 13 }, (_, index) => ({
+			id: `wl-${index + 1}`,
+			name: `List ${index + 1}`
+		}));
+		await mockWatchlistsMetadata(page, { activeWatchlistId: 'wl-1', watchlists });
+		const wl1ViewCalls = await mockWatchlistView(page, 'wl-1', {
+			id: 'wl-1',
+			name: 'List 1',
+			stocks: STOCKS,
+			warnings: []
+		});
+
+		const apiRequests: string[] = [];
+		page.on('request', (request) => {
+			if (request.url().includes('/api/')) {
+				apiRequests.push(request.url());
+			}
+		});
+
+		await page.goto('/');
+		await expect(page.getByRole('tab', { name: 'List 1' })).toHaveAttribute(
+			'aria-selected',
+			'true'
+		);
+		const requestCountBeforeResize = apiRequests.length;
+
+		// wide desktop -> mobile -> medium -> wide desktop again.
+		await page.setViewportSize({ width: 375, height: 812 });
+		await expect(page.getByRole('tab')).toHaveCount(1);
+		await page.setViewportSize({ width: 900, height: 900 });
+		await expect(page.getByRole('tab')).toHaveCount(5);
+		await page.setViewportSize({ width: 1280, height: 900 });
+		await expect(page.getByRole('tab')).toHaveCount(8);
+
+		expect(apiRequests.length).toBe(requestCountBeforeResize);
+		expect(wl1ViewCalls.calls).toEqual(['wl-1']);
 	});
 });

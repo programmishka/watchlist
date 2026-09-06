@@ -269,7 +269,14 @@ test.describe('Watchlist table sorting', () => {
 		await expect(columnHeader(page, 'Price')).toHaveAttribute('aria-sort', 'ascending');
 	});
 
-	test('resets sorting when switching to another watchlist', async ({ page }) => {
+	test('resets sorting when switching to another watchlist', async ({ page }, testInfo) => {
+		// Both tabs fit directly at desktop capacity (TASK-035); this test
+		// exercises tab-click switching mechanics, not responsive navigation.
+		test.skip(
+			testInfo.project.name !== 'chromium-desktop',
+			'desktop-only: both tabs directly visible'
+		);
+
 		await mockWatchlistsMetadata(page, {
 			activeWatchlistId: 'wl-1',
 			watchlists: [

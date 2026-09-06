@@ -125,7 +125,14 @@ test.describe('Watchlist filtering', () => {
 		await expect(page.getByText('No stocks match the current filter.')).toBeVisible();
 	});
 
-	test('resets the filter when switching to another watchlist', async ({ page }) => {
+	test('resets the filter when switching to another watchlist', async ({ page }, testInfo) => {
+		// Both tabs fit directly at desktop capacity (TASK-035); this test
+		// exercises tab-click switching mechanics, not responsive navigation.
+		test.skip(
+			testInfo.project.name !== 'chromium-desktop',
+			'desktop-only: both tabs directly visible'
+		);
+
 		await mockWatchlistsMetadata(page, {
 			activeWatchlistId: 'wl-1',
 			watchlists: [

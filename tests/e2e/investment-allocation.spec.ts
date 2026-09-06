@@ -484,7 +484,14 @@ test.describe('Investment allocation', () => {
 		await expect(page.getByText('Allocated savings: €997')).toBeVisible();
 	});
 
-	test('switching Watchlist tabs clears the allocation', async ({ page }) => {
+	test('switching Watchlist tabs clears the allocation', async ({ page }, testInfo) => {
+		// Both tabs fit directly at desktop capacity (TASK-035); this test
+		// exercises tab-click switching mechanics, not responsive navigation.
+		test.skip(
+			testInfo.project.name !== 'chromium-desktop',
+			'desktop-only: both tabs directly visible'
+		);
+
 		await mockWatchlistsMetadata(page, {
 			activeWatchlistId: WATCHLIST_ID,
 			watchlists: [

@@ -900,6 +900,46 @@ column widths (§26.11) all respond continuously to available space rather
 than switching behavior at fixed pixel thresholds, with 375/768/1280/1600px
 used only as representative verification widths.
 
+### 14.5 Responsive Watchlist Navigation (TASK-035, superseding the horizontal tab-scrolling strategy from TASK-016 and TASK-034 described below)
+
+> The active Watchlist is always directly visible in navigation. Inactive
+> Watchlists may move into a responsive overflow menu.
+
+TASK-016 established a horizontally scrollable Watchlist tab strip (§26.1),
+and TASK-034 kept that mechanism while compacting the surrounding chrome
+(§26.11). With enough Watchlists, that strip could scroll the active tab out
+of view — especially right after activating it — with no other indication of
+which Watchlist was active, since TASK-034 had already removed the duplicate
+active-Watchlist heading. Horizontal scrolling is therefore no longer used as
+the Watchlist-navigation overflow strategy:
+
+> Horizontal scrolling is not the primary Watchlist-navigation overflow
+> mechanism. A bounded set of Watchlists is displayed directly; the rest move
+> into an overflow disclosure.
+
+Final responsive direct-tab capacity policy, derived from viewport width via
+`matchMedia` (`src/lib/client/watchlistNavigation.ts`):
+
+```text
+width < 768px    -> 1 direct tab  (mobile: active Watchlist only)
+768px-1279px     -> 5 direct tabs (medium desktop/tablet)
+width >= 1280px  -> 8 direct tabs (wide desktop)
+```
+
+These breakpoints intentionally align with the project's existing
+375/768/1280/1600px representative verification widths (§14.4) rather than
+introducing a new breakpoint system.
+
+The active Watchlist always consumes one of the direct slots; when necessary,
+the earliest otherwise-visible inactive Watchlist moves to overflow to make
+room for it. The direct/overflow split is computed by a pure, dependency-free
+helper, `partitionWatchlistsForNavigation(watchlists, activeWatchlistId,
+capacity)`, that preserves the server-supplied Watchlist order (§9.2) in both
+the returned `visible` and `overflow` arrays, is deterministic, and performs
+no DOM measurement. This is client presentation state only: it does not
+reorder or persist Watchlists, and a viewport resize that crosses a capacity
+breakpoint recomputes the split locally without any server request.
+
 ## 15. Market Data
 
 ### 15.1 Provider
@@ -1506,7 +1546,7 @@ Client-side Watchlist HTTP access is centralized behind a small client API modul
 
 Tab controls are disabled while a Watchlist load (initial or tab-switch) is in flight, which also prevents out-of-order network responses from a superseded request from overwriting newer state.
 
-Tab overflow on narrow viewports is handled with simple horizontal scrolling on the tab strip rather than a dropdown or other overflow menu. No general-purpose CSS framework or component library was introduced; layout uses native Flexbox and a responsive content-width container.
+Tab overflow on narrow viewports was originally handled with simple horizontal scrolling on the tab strip rather than a dropdown or other overflow menu. TASK-035 (§14.5, §26.12) later replaced this with responsive direct-tab-plus-overflow navigation once many-Watchlist testing showed the active tab could scroll out of view; the tab identity/keying, disabled-while-loading, and server-authoritative-selection rules described above are otherwise unchanged. No general-purpose CSS framework or component library was introduced; layout uses native Flexbox and a responsive content-width container.
 
 ### 26.2 Watchlist Management UI (TASK-019)
 
@@ -1711,7 +1751,10 @@ incorrectly. `+page.svelte`'s existing deletion orchestration — the
 transition to the server-selected replacement Watchlist — is unchanged; only
 which markup triggers it changed. With no Watchlists, `WatchlistTabs` itself
 is not rendered, so no delete control exists, with no extra conditional
-needed beyond the existing one.
+needed beyond the existing one. TASK-035 (§26.12) later corrected this
+control's visual `×` centering and gave it explicit square geometry; the
+sibling-elements structure and accessible name described here are otherwise
+unchanged.
 
 **Consolidated workspace toolbar.** The stock-add form (§26.3), the
 company-name filter (§26.5), and the investment-allocation form (§26.7)
@@ -1760,6 +1803,80 @@ unusually long values, wrapping rather than clipping.
 from a `Delete`-labeled button to a compact icon-only button (a trash-can
 glyph), keeping its existing accessible name (`Remove <symbol>`) and
 no-confirmation removal semantics unchanged.
+
+### 26.12 Responsive Watchlist Navigation (TASK-035)
+
+TASK-035 replaces the horizontally scrollable Watchlist tab strip (§26.1,
+§26.11) with the responsive direct-tab-plus-overflow navigation model
+described in §14.5, while otherwise reusing the existing shell: `+page.svelte`
+still owns `watchlists`/`activeWatchlistId` and the tab-switch/create/delete
+orchestration (§26.1-§26.2); only how the navigation is presented changed.
+`WatchlistTabs.svelte` kept its filename (its responsibility — direct tabs
+plus overflow navigation — remains the same component boundary described by
+the task; see the task's §55 for why no rename was needed) but now owns the
+capacity-driven visibility split.
+
+**Visibility algorithm.** `partitionWatchlistsForNavigation` (§14.5,
+`src/lib/client/watchlistNavigation.ts`) is a pure function with no DOM
+dependency: given the full Watchlist list, the active id, and a capacity, it
+returns `{ visible, overflow }`, each preserving source order. The rule is
+"always include the active Watchlist, then take the earliest inactive
+Watchlists that fit" — implemented by seeding a selected-id set with the
+active Watchlist (if present) before filling remaining capacity from the
+front of the list, then partitioning the original array by membership in
+that set. This guarantees the active Watchlist is never overflow-only,
+avoids unnecessary reshuffling of already-visible inactive Watchlists, and
+keeps duplicate-named Watchlists distinct (identity is by `id` throughout,
+consistent with §26.1). `navigationCapacityForWidth` (same module) is the
+pure width-to-capacity mapping documented in §14.5; the component computes
+its live capacity from `window.innerWidth`, guarded by `$app/environment`'s
+`browser` flag so it never touches `window`/`matchMedia` during SSR, and
+recomputes only on `matchMedia` `change` events at the two capacity
+breakpoints — never on every resize pixel, and never via a server request.
+
+**Overflow disclosure.** Overflow Watchlists render inside a native
+`<details>`/`<summary>` disclosure (no icon library, no menu component
+introduced), kept as a sibling of the `role="tablist"` div rather than
+inside it, so it is never mistaken for a Watchlist tab. Its label is
+`Watchlists` when the direct capacity is 1 (mobile — only the active
+Watchlist is ever directly visible) and `More` otherwise. Overflow items are
+plain `<button>`s inside a `<ul>`, not `role="tab"`; selecting one calls the
+same `onSelect(watchlistId)` callback a direct tab uses, so overflow
+selection reuses TASK-016's existing PUT-then-load flow, error handling, and
+`managementBusy` gating verbatim — there is no separate overflow-specific
+selection or error path. The menu closes as soon as a selection is
+initiated (before the network call resolves, so a failed selection doesn't
+leave a stale menu open) and on Escape or an outside click.
+
+Two mechanisms intentionally do not read the same signal for "is the
+overflow open": the declarative `open={overflowOpen}` binding (backed by a
+`$state` variable, synced from the native `<details>` via an explicit
+`ontoggle` handler rather than Svelte's `bind:open`) drives rendering, while
+the Escape-key and outside-click dismissal handlers read `detailsEl.open`
+(the live DOM property) directly instead of `overflowOpen`. This is a
+deliberate fix for a real timing bug found during implementation: a
+keyboard-triggered (Space/Enter) native toggle flips the DOM `open` property
+synchronously, but the `toggle` event that updates `overflowOpen` fires on a
+separately queued task shortly after (per the HTML `<details>` spec); gating
+dismissal on `overflowOpen` occasionally raced that delay and left a
+just-opened menu unclosable by Escape. Reading `detailsEl.open` directly has
+no such race, since it reflects the browser's own synchronous state.
+
+**Active-delete `×` centering fix.** The compact delete control introduced
+by TASK-034 (§26.11) is now `display: inline-grid; place-items: center` with
+an explicit equal `width`/`height` and `padding: 0`, rather than relying on
+line-height/padding to visually center the glyph — a scoped override local
+to `WatchlistTabs.svelte`, not a change to the shared `.btn-icon` class also
+used by the per-row stock-removal control (§26.11), so that control's
+appearance is unaffected. The `×` glyph, accessible name
+(`Remove watchlist "<name>"`), and confirmation workflow are unchanged from
+TASK-034.
+
+**No business/persistence change.** Direct-vs-overflow placement is
+client-only presentation state, recomputed from already-loaded Watchlist
+metadata; it does not reorder or persist Watchlists (§9.2, §11.3) and issues
+no additional API requests beyond the existing tab-switch/create/delete
+flows.
 
 ---
 

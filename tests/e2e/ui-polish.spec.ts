@@ -63,10 +63,10 @@ test.describe('UI polish: complete populated page', () => {
 		await expect(page.getByRole('heading', { name: 'Watchlist', level: 1 })).toBeVisible();
 		await expect(page.getByRole('tablist')).toBeVisible();
 		await expect(page.getByRole('tab', { name: 'Main' })).toHaveAttribute('aria-selected', 'true');
-		await expect(page.getByRole('tab', { name: 'Dividend' })).toHaveAttribute(
-			'aria-selected',
-			'false'
-		);
+		// The second watchlist may be a direct tab (desktop) or in the
+		// responsive overflow menu (mobile, TASK-035); either way it must not
+		// be the selected tab.
+		await expect(page.getByRole('tab', { name: 'Dividend', selected: true })).toHaveCount(0);
 		// The active tab is the sole workspace identification (TASK-034 §71):
 		// no standalone heading duplicates the active Watchlist's name.
 		await expect(page.getByRole('heading', { name: 'Main', level: 2 })).toHaveCount(0);

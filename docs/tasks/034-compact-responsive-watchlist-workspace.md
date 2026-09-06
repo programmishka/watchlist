@@ -4,6 +4,10 @@
 
 Done
 
+## Historical Note (TASK-035)
+
+TASK-035 replaces this task's horizontally scrollable many-tab strategy with active-visible responsive overflow navigation, and corrects the compact active-tab delete button's `×` alignment introduced here. The consolidated toolbar, wider desktop page, content-aware table column widths, and other layout work described below are otherwise unchanged. See `ARCHITECTURE.md` §14.5 and §26.12.
+
 ## Goal
 
 Redesign the existing Watchlist workspace layout to use screen space more efficiently and give the stock table clear visual priority.
