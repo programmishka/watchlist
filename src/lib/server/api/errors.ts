@@ -13,3 +13,15 @@ export class InvalidRequestError extends Error {
 		this.name = 'InvalidRequestError';
 	}
 }
+
+/**
+ * Thrown when a request body exceeds `MAX_JSON_REQUEST_BODY_BYTES`
+ * (TASK-039), whether detected from `Content-Length` or from the actual
+ * streamed byte count. Maps to HTTP 413.
+ */
+export class PayloadTooLargeError extends Error {
+	constructor(message = 'Request body is too large.') {
+		super(message);
+		this.name = 'PayloadTooLargeError';
+	}
+}

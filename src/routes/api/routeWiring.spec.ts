@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ApiErrorResponse } from '$lib/server/api/ApiError';
+import { MAX_JSON_REQUEST_BODY_BYTES } from '$lib/server/api/requestBody';
 import { DELETE as activeDelete, PUT as activePut } from './watchlists/active/+server';
 import { GET as watchlistGet } from './watchlists/[watchlistId]/+server';
 import { DELETE as stockDelete } from './watchlists/[watchlistId]/stocks/[symbol]/+server';
@@ -29,6 +30,17 @@ function jsonRequest(body: unknown): Request {
 
 function malformedRequest(): Request {
 	return new Request('https://example.test', { method: 'POST', body: '{ not valid json' });
+}
+
+function oversizedRequest(): Request {
+	// No Content-Length header is exposed on a string-bodied Request in this
+	// runtime (verified separately), so this exercises the mandatory
+	// streaming byte-count path, not the Content-Length fast path.
+	const filler = 'x'.repeat(MAX_JSON_REQUEST_BODY_BYTES + 1);
+	return new Request('https://example.test', {
+		method: 'POST',
+		body: JSON.stringify({ name: filler })
+	});
 }
 
 // Only used for events that never reach createApplicationServices (auth/body
@@ -158,6 +170,95 @@ describe('API route malformed-JSON handling (real +server.ts handlers)', () => {
 		]
 	])('%s returns 400 INVALID_REQUEST for malformed JSON', async (_label, callRoute) => {
 		await expectApiError(await callRoute(), 400, 'INVALID_REQUEST');
+	});
+});
+
+describe('API route oversized-body handling (TASK-039, real +server.ts handlers)', () => {
+	const authenticatedLocals = { user: { id: 'user-1' } };
+
+	it.each([
+		[
+			'POST /api/watchlists',
+			() =>
+				watchlistsPost(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						request: oversizedRequest(),
+						platform: undefined
+					})
+				)
+		],
+		[
+			'PUT /api/watchlists/active',
+			() =>
+				activePut(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						request: oversizedRequest(),
+						platform: undefined
+					})
+				)
+		],
+		[
+			'POST /api/watchlists/[id]/stocks',
+			() =>
+				stocksPost(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						params: { watchlistId: 'wl-1' },
+						request: oversizedRequest(),
+						platform: undefined
+					})
+				)
+		],
+		[
+			'PUT /api/target-prices/[symbol]',
+			() =>
+				targetPricePut(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						params: { symbol: 'AAPL' },
+						request: oversizedRequest(),
+						platform: undefined
+					})
+				)
+		],
+		[
+			'POST /api/watchlists/[id]/investment-allocation',
+			() =>
+				investmentAllocationPost(
+					unauthenticatedEvent({
+						locals: authenticatedLocals,
+						params: { watchlistId: 'wl-1' },
+						request: oversizedRequest(),
+						platform: undefined
+					})
+				)
+		]
+	])(
+		'%s returns 413 PAYLOAD_TOO_LARGE for an oversized body without constructing application services',
+		async (_label, callRoute) => {
+			// platform is deliberately undefined: if the body-size boundary ran
+			// after createApplicationServices, this would fail with 500
+			// INTERNAL_ERROR (PlatformUnavailableError) instead of the expected 413.
+			await expectApiError(await callRoute(), 413, 'PAYLOAD_TOO_LARGE');
+		}
+	);
+
+	it('still applies existing field validation for a small body with an invalid field, not 413', async () => {
+		const kv = new FakeKv();
+		const event = unauthenticatedEvent({
+			locals: authenticatedLocals,
+			request: new Request('https://example.test', {
+				method: 'POST',
+				body: JSON.stringify({ name: '' })
+			}),
+			platform: { env: { WATCHLIST_KV: kv } }
+		});
+
+		// An empty name is well under the byte limit; this must fail on the
+		// existing INVALID_WATCHLIST_NAME field check, not the size boundary.
+		await expectApiError(await watchlistsPost(event), 400, 'INVALID_WATCHLIST_NAME');
 	});
 });
 

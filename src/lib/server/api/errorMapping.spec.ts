@@ -17,7 +17,7 @@ import {
 	WatchlistStockLimitReachedError
 } from '../watchlist/WatchlistServiceErrors';
 import type { ApiErrorResponse } from './ApiError';
-import { InvalidRequestError, UnauthenticatedError } from './errors';
+import { InvalidRequestError, PayloadTooLargeError, UnauthenticatedError } from './errors';
 import { mapErrorToResponse } from './errorMapping';
 
 async function statusAndCode(response: Response): Promise<{ status: number; code: string }> {
@@ -29,6 +29,7 @@ describe('mapErrorToResponse', () => {
 	it.each([
 		[new UnauthenticatedError(), 401, 'UNAUTHENTICATED'],
 		[new InvalidRequestError(), 400, 'INVALID_REQUEST'],
+		[new PayloadTooLargeError(), 413, 'PAYLOAD_TOO_LARGE'],
 		[new InvalidWatchlistNameError('  '), 400, 'INVALID_WATCHLIST_NAME'],
 		[new InvalidWatchlistSymbolError(''), 400, 'INVALID_STOCK_SYMBOL'],
 		[new InvalidTargetPriceSymbolError(''), 400, 'INVALID_SYMBOL'],
@@ -56,6 +57,16 @@ describe('mapErrorToResponse', () => {
 
 		expect(body.error.message).toContain('1,000');
 		expect(body.error.message.toLowerCase()).toContain('stocks');
+	});
+
+	it('gives a generic public message for an oversized request body, not internal details', async () => {
+		const response = mapErrorToResponse(new PayloadTooLargeError('internal buffer detail'));
+		const body = (await response.json()) as ApiErrorResponse;
+
+		expect(response.status).toBe(413);
+		expect(body).toEqual({
+			error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body is too large.' }
+		});
 	});
 
 	it('never leaks the original error message for unexpected errors', async () => {

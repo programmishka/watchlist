@@ -4,6 +4,10 @@
 
 Done
 
+## Follow-Up
+
+TASK-039 later implemented the request-body-size protection identified by this audit.
+
 ## Goal
 
 Perform a focused security audit of all externally controlled application inputs before implementing systematic input-length and numeric-range hardening.

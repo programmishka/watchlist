@@ -4,6 +4,10 @@
 
 Done
 
+## Follow-Up
+
+TASK-039 completes the remaining request-body-size hardening intentionally deferred from this task.
+
 ## Goal
 
 Implement the input-boundary and resource-limit hardening identified by TASK-037.

@@ -18,7 +18,7 @@ import {
 	WatchlistStockLimitReachedError
 } from '../watchlist/WatchlistServiceErrors';
 import type { ApiErrorCode, ApiErrorResponse } from './ApiError';
-import { InvalidRequestError, UnauthenticatedError } from './errors';
+import { InvalidRequestError, PayloadTooLargeError, UnauthenticatedError } from './errors';
 
 function errorResponse(status: number, code: ApiErrorCode, message: string): Response {
 	const body: ApiErrorResponse = { error: { code, message } };
@@ -36,6 +36,9 @@ export function mapErrorToResponse(error: unknown): Response {
 	}
 	if (error instanceof InvalidRequestError) {
 		return errorResponse(400, 'INVALID_REQUEST', error.message);
+	}
+	if (error instanceof PayloadTooLargeError) {
+		return errorResponse(413, 'PAYLOAD_TOO_LARGE', 'Request body is too large.');
 	}
 	if (error instanceof InvalidWatchlistNameError) {
 		return errorResponse(400, 'INVALID_WATCHLIST_NAME', 'The watchlist name is invalid.');

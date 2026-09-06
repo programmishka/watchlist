@@ -1,6 +1,6 @@
 # Input Boundary Security Audit
 
-Status: Complete (TASK-037); field/resource-bound findings closed by TASK-038
+Status: Complete (TASK-037); field/resource-bound findings closed by TASK-038; request-body-size finding closed by TASK-039
 
 This document is the output of TASK-037. It is an **audit and design
 document only**. No validation behavior was changed while producing it. It
@@ -32,6 +32,38 @@ limit this audit recommended (§14/§15/§18), largely as recommended:
 
 This section records implementation status only; the findings above (§1-§18)
 are preserved unmodified as the original audit record.
+
+## TASK-039 Implementation Status
+
+TASK-039 closes the request-body-size/transport-level gap this audit left
+open (§10/§18) and that TASK-038 explicitly deferred:
+
+* A single application-wide constant, `MAX_JSON_REQUEST_BODY_BYTES` = 4,096
+  bytes (`src/lib/server/api/requestBody.ts`), now bounds every JSON
+  request body, chosen after measuring the actual maximum legitimate
+  payload for each field bound this audit's own §18/TASK-038 established
+  (Watchlist name, stock symbol, watchlistId, Target Price, Total Savings —
+  all a few hundred bytes at most).
+* `Content-Length` above the limit is rejected before the body is read;
+  missing, malformed, or misleadingly small `Content-Length` values fall
+  through to mandatory incremental byte-counted streaming, which remains
+  authoritative in every case — matching this audit's original §10 warning
+  that `request.json()` ran before any field-level check.
+* The existing shared `parseJsonBody()` helper (already the single call site
+  used by every JSON route since TASK-037) now performs the bounded read
+  before `JSON.parse`, so no route required individual modification and no
+  unbounded `request.json()` remains anywhere in the JSON API surface.
+* A new stable API code, `PAYLOAD_TOO_LARGE` (413), was introduced; existing
+  `400 INVALID_REQUEST` semantics for malformed/empty bodies below the limit
+  are unchanged, and authentication continues to run before the body-size
+  boundary, unchanged from TASK-037/038.
+* Verified under the real Cloudflare Workers (workerd) runtime via
+  `npm run preview`, including a chunked request with no `Content-Length`
+  header at all, confirming the streaming byte count (not the header) is
+  what actually protects the Worker.
+
+This section records implementation status only; the findings above (§1-§18)
+remain the original, unmodified audit record.
 
 Method: every route handler, request parser, domain/service validation
 function, persistence repository, and client input component under

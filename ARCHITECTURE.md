@@ -1605,7 +1605,7 @@ Errors use a stable JSON shape independent of internal exception class names:
 { "error": { "code": "DUPLICATE_SYMBOL", "message": "The symbol already exists in this watchlist." } }
 ```
 
-Supported codes: `UNAUTHENTICATED`, `INVALID_REQUEST`, `WATCHLIST_NOT_FOUND`, `NO_ACTIVE_WATCHLIST`, `INVALID_WATCHLIST_NAME`, `INVALID_SYMBOL`, `INVALID_STOCK_SYMBOL`, `UNKNOWN_STOCK_SYMBOL`, `DUPLICATE_SYMBOL`, `SYMBOL_NOT_FOUND`, `INVALID_TARGET_PRICE`, `INVALID_TOTAL_SAVINGS`, `WATCHLIST_STOCK_LIMIT_REACHED`, `MARKET_DATA_UNAVAILABLE`, `PERSISTENCE_ERROR`, `INTERNAL_ERROR`. `WATCHLIST_STOCK_LIMIT_REACHED` (409, TASK-038) is returned when a Watchlist already at its `MAX_STOCKS_PER_WATCHLIST` capacity (§12.1.3) is sent an additional stock. Business/domain/provider exception classes remain independent of HTTP; one small server-side mapping helper centralizes the translation to status + code + message, so routes never expose raw Yahoo/Frankfurter/Cloudflare errors or reproduce this mapping themselves.
+Supported codes: `UNAUTHENTICATED`, `INVALID_REQUEST`, `WATCHLIST_NOT_FOUND`, `NO_ACTIVE_WATCHLIST`, `INVALID_WATCHLIST_NAME`, `INVALID_SYMBOL`, `INVALID_STOCK_SYMBOL`, `UNKNOWN_STOCK_SYMBOL`, `DUPLICATE_SYMBOL`, `SYMBOL_NOT_FOUND`, `INVALID_TARGET_PRICE`, `INVALID_TOTAL_SAVINGS`, `WATCHLIST_STOCK_LIMIT_REACHED`, `PAYLOAD_TOO_LARGE`, `MARKET_DATA_UNAVAILABLE`, `PERSISTENCE_ERROR`, `INTERNAL_ERROR`. `WATCHLIST_STOCK_LIMIT_REACHED` (409, TASK-038) is returned when a Watchlist already at its `MAX_STOCKS_PER_WATCHLIST` capacity (§12.1.3) is sent an additional stock. `PAYLOAD_TOO_LARGE` (413, TASK-039) is returned when a JSON request body exceeds `MAX_JSON_REQUEST_BODY_BYTES` — see §29.3. Business/domain/provider exception classes remain independent of HTTP; one small server-side mapping helper centralizes the translation to status + code + message, so routes never expose raw Yahoo/Frankfurter/Cloudflare errors or reproduce this mapping themselves.
 
 `INVALID_STOCK_SYMBOL` (TASK-029) is specifically the stock-add syntax-validation failure (§12.1) and is distinct from `UNKNOWN_STOCK_SYMBOL` (syntactically valid, provider does not recognize it) and `MARKET_DATA_UNAVAILABLE` (provider itself failed). `INVALID_SYMBOL` remains a separate, narrower code used only by the Target Price `symbol` path parameter (empty/whitespace-only check, §20) — it does not apply the stock-symbol grammar and was intentionally left unchanged by TASK-029.
 
@@ -2218,7 +2218,94 @@ meaning.
 No request-body-size/transport-level hardening is included here — TASK-037
 identified that `request.json()` runs before any field-level check and that
 Cloudflare's platform body-size limits are much larger than legitimate
-application requests; that remains open as a separate follow-up (TASK-039).
+application requests; that gap is closed by TASK-039 (§29.3 below).
+
+### 29.3 Request Body Size Hardening (TASK-039)
+
+> JSON mutation endpoints accept only small bounded request bodies. Oversized
+> bodies are rejected before JSON parsing and before application services,
+> persistence, or external providers are reached.
+
+TASK-038 (§29.2) bounds individual fields, but those bounds apply only after
+a JSON request body has already been fully read and parsed — an oversized
+`unused` property, for example, could still force the Worker to buffer and
+parse an arbitrarily large body before any field check runs. The final
+request flow for every JSON-body endpoint is:
+
+```text
+authenticated JSON request
+→ authenticate (existing first trust boundary, §8/§24.2, unchanged)
+→ bounded byte read (TASK-039)
+→ JSON parse
+→ field validation (TASK-038, §29.2)
+→ application services
+```
+
+Authentication is checked first, exactly as before this task: every route
+calls `requireUserId(locals)` before reading the request body, so an
+unauthenticated oversized request still receives the existing
+`401 UNAUTHENTICATED` response rather than `413`. This task changes only the
+payload-resource boundary that runs after authentication succeeds, not
+authentication itself.
+
+**Limit.** A single application-wide constant, `MAX_JSON_REQUEST_BODY_BYTES`
+(`src/lib/server/api/requestBody.ts`), bounds every JSON request body at
+**4,096 bytes (4 KiB)**. This was chosen after measuring the actual maximum
+legitimate payload for every JSON-body endpoint (Watchlist name, stock
+symbol, watchlistId, Target Price, Total Savings — all bounded by §29.2's
+field limits): each stays under a few hundred bytes even accounting for
+worst-case UTF-8 expansion and JSON syntax overhead, so 4 KiB leaves an order
+of magnitude of headroom for small future fields while remaining tiny
+relative to Cloudflare's much larger platform-level request-body limit.
+Cloudflare's platform limit is intentionally **not** treated as the
+application's acceptable payload size — it bounds what the platform will
+forward at all, not what this API's legitimate clients ever need to send.
+
+**Bounded reading.** `readBoundedRequestBytes()` (same module) is the shared
+byte-counting boundary every JSON route now passes through via the existing
+single `parseJsonBody()` helper (unchanged call sites, TASK-037/038's
+existing pattern):
+
+1. If `Content-Length` is present and parses as a non-negative integer
+   greater than the limit, the request is rejected immediately as
+   `PayloadTooLargeError` — the body is never touched.
+2. Otherwise (header missing, malformed, or declaring a value at or below the
+   limit — including a value smaller than the actual body), the body is read
+   incrementally from the request's `ReadableStream` via `getReader()`,
+   counting raw bytes per chunk. Once the running total exceeds the limit,
+   the reader is cancelled and `PayloadTooLargeError` is thrown without
+   buffering the remainder or the rest of the stream. `Content-Length` is
+   therefore only ever a fast-path optimization; the streaming byte count is
+   always authoritative.
+3. A body accepted by both stages is decoded once via `TextDecoder` and
+   parsed with `JSON.parse`. Malformed JSON below the limit continues to map
+   to the existing `400 INVALID_REQUEST`, unchanged from TASK-037; an empty
+   body behaves the same way, also unchanged. An oversized body is never
+   parsed as JSON at all, regardless of whether its content would have been
+   valid or malformed.
+
+This uses only standard Web Platform APIs (`ReadableStream`,
+`ReadableStreamDefaultReader`, `TextDecoder`, `Uint8Array`) already available
+in the Cloudflare Workers runtime — no Node-specific stream API and no new
+production dependency were required.
+
+**Error shape.** `PayloadTooLargeError` maps to a new stable API code,
+`PAYLOAD_TOO_LARGE` (413, §24.3), with a generic public message
+(`"Request body is too large."`) that never exposes internal buffer sizes,
+Worker memory details, or the exact configured limit.
+
+**Short-circuit.** Because the bounded read happens inside the existing
+`parseJsonBody()` call at the top of each route handler, an oversized body
+never reaches `createApplicationServices()`, any repository, or any external
+provider (`MarketDataProvider`/`ExchangeRateProvider`) — verified by route
+tests asserting `413` with `platform` deliberately left undefined (the same
+technique TASK-038's tests already use to prove early-validation ordering).
+
+TASK-038's field/resource bounds (§29.2) are unchanged and remain necessary:
+body-size protection is a transport/resource boundary that complements those
+field-level checks, not a replacement for them — a well-under-limit body can
+still fail field validation (e.g. an empty Watchlist name), and that
+existing behavior is preserved.
 
 ---
 
