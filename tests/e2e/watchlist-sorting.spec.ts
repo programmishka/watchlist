@@ -107,13 +107,28 @@ async function symbolColumn(page: Page): Promise<string[]> {
 }
 
 test.describe('Watchlist table sorting', () => {
-	test('renders rows in API/Watchlist order before any header is activated', async ({ page }) => {
+	test('defaults to Name ascending on initial load regardless of API order (TASK-032)', async ({
+		page
+	}) => {
 		await mockSingleWatchlist(page, API_ORDER);
 		await page.goto('/');
 
 		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(5);
-		expect(await symbolColumn(page)).toEqual(['SAP.DE', 'MSFT', 'AAPL', 'GAW.L', 'UNKNOWN']);
+		// API order above is SAP.DE, MSFT, AAPL, GAW.L, UNKNOWN — Name ascending
+		// reorders it, and the missing-name stock (UNKNOWN) stays last.
+		expect(await symbolColumn(page)).toEqual(['AAPL', 'GAW.L', 'MSFT', 'SAP.DE', 'UNKNOWN']);
+		await expect(columnHeader(page, 'Name')).toHaveAttribute('aria-sort', 'ascending');
 		await expect(columnHeader(page, 'Symbol')).toHaveAttribute('aria-sort', 'none');
+	});
+
+	test('first click on Name from the default toggles to descending', async ({ page }) => {
+		await mockSingleWatchlist(page, API_ORDER);
+		await page.goto('/');
+
+		await sortButton(page, 'Name').click();
+
+		expect(await symbolColumn(page)).toEqual(['SAP.DE', 'MSFT', 'GAW.L', 'AAPL', 'UNKNOWN']);
+		await expect(columnHeader(page, 'Name')).toHaveAttribute('aria-sort', 'descending');
 	});
 
 	test('first click sorts Price ascending', async ({ page }) => {
@@ -201,6 +216,18 @@ test.describe('Watchlist table sorting', () => {
 		expect(await symbolColumn(page)).toEqual(['GAW.L', 'SAP.DE', 'UNKNOWN', 'MSFT', 'AAPL']);
 	});
 
+	test('applies the company-name filter on top of the default Name-ascending sort', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, API_ORDER);
+		await page.goto('/');
+
+		await page.getByLabel('Filter by company name').fill('o');
+
+		expect(await symbolColumn(page)).toEqual(['GAW.L', 'MSFT']);
+		await expect(columnHeader(page, 'Name')).toHaveAttribute('aria-sort', 'ascending');
+	});
+
 	test('sorts only the filtered rows and keeps the filtered count', async ({ page }) => {
 		await mockSingleWatchlist(page, API_ORDER);
 		await page.goto('/');
@@ -277,6 +304,7 @@ test.describe('Watchlist table sorting', () => {
 		await page.getByRole('tab', { name: 'Dividend' }).click();
 
 		await expect(symbolColumnLocator(page)).toHaveText(['GAW.L', 'SAP.DE']);
+		await expect(columnHeader(page, 'Name')).toHaveAttribute('aria-sort', 'ascending');
 		await expect(columnHeader(page, 'Price')).toHaveAttribute('aria-sort', 'none');
 	});
 
@@ -313,6 +341,7 @@ test.describe('Watchlist table sorting', () => {
 		await page.getByRole('button', { name: 'Add watchlist' }).click();
 
 		await expect(symbolColumnLocator(page)).toHaveText(['GAW.L', 'SAP.DE']);
+		await expect(columnHeader(page, 'Name')).toHaveAttribute('aria-sort', 'ascending');
 		await expect(columnHeader(page, 'Price')).toHaveAttribute('aria-sort', 'none');
 	});
 
@@ -349,6 +378,7 @@ test.describe('Watchlist table sorting', () => {
 		await page.getByRole('button', { name: 'Delete current watchlist' }).click();
 
 		await expect(symbolColumnLocator(page)).toHaveText(['GAW.L', 'SAP.DE']);
+		await expect(columnHeader(page, 'Name')).toHaveAttribute('aria-sort', 'ascending');
 		await expect(columnHeader(page, 'Price')).toHaveAttribute('aria-sort', 'none');
 	});
 
@@ -395,6 +425,29 @@ test.describe('Watchlist table sorting', () => {
 
 		await expect(columnHeader(page, 'Target Price')).toHaveAttribute('aria-sort', 'ascending');
 		await expect(symbolColumnLocator(page)).toHaveText(['SAP.DE', 'AAPL']);
+	});
+
+	test('inserts a newly added stock at its Name-sorted position under the default sort', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page, [MSFT, SAP_DE]);
+		await mockAddStock(page, WATCHLIST_ID, () => ({
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [MSFT, SAP_DE, AAPL],
+			warnings: []
+		}));
+
+		await page.goto('/');
+		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(2);
+		expect(await symbolColumn(page)).toEqual(['MSFT', 'SAP.DE']);
+		await expect(columnHeader(page, 'Name')).toHaveAttribute('aria-sort', 'ascending');
+
+		await page.getByLabel('Stock symbol').fill('AAPL');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		await expect(columnHeader(page, 'Name')).toHaveAttribute('aria-sort', 'ascending');
+		await expect(symbolColumnLocator(page)).toHaveText(['AAPL', 'MSFT', 'SAP.DE']);
 	});
 
 	test('preserves sort and inserts a newly added stock at its sorted position', async ({

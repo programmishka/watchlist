@@ -44,18 +44,25 @@ test.describe('Watchlist table', () => {
 
 		const table = page.getByRole('table');
 		await expect(table).toBeVisible();
-		await expect(table.getByRole('columnheader')).toHaveText(EXPECTED_COLUMNS);
+		// Header text may include the active-column sort indicator (TASK-032
+		// defaults to Name ascending), which is not part of the column label.
+		const headerTexts = await table.getByRole('columnheader').allTextContents();
+		expect(headerTexts.map((text) => text.replace(/[↑↓]/g, '').trim())).toEqual(EXPECTED_COLUMNS);
 	});
 
-	test('renders representative rows in the order returned by the server', async ({ page }) => {
+	test('renders representative rows sorted by Name ascending by default (TASK-032)', async ({
+		page
+	}) => {
 		await mockSingleWatchlist(page, [SAP_DE_STOCK, AAPL_STOCK, GAW_L_STOCK, UNKNOWN_STOCK]);
 		await page.goto('/');
 
 		const rows = page.getByRole('table').locator('tbody tr');
 		await expect(rows).toHaveCount(4);
-		await expect(rows.nth(0)).toContainText('SAP.DE');
-		await expect(rows.nth(1)).toContainText('AAPL');
-		await expect(rows.nth(2)).toContainText('GAW.L');
+		// Server/API order above is SAP.DE, AAPL, GAW.L, UNKNOWN — the default
+		// Name-ascending sort reorders it, with the missing-name stock last.
+		await expect(rows.nth(0)).toContainText('AAPL');
+		await expect(rows.nth(1)).toContainText('GAW.L');
+		await expect(rows.nth(2)).toContainText('SAP.DE');
 		await expect(rows.nth(3)).toContainText('UNKNOWN');
 	});
 

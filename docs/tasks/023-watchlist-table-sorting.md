@@ -1567,3 +1567,15 @@ When finished, report:
 Do not proceed to investment-allocation UI.
 
 Do not stage, commit, or push changes. Git operations are performed manually by the user.
+
+---
+
+## Supersession Note (TASK-032)
+
+TASK-032 supersedes this task only regarding the reset/default state: an
+active-Watchlist transition (initial load, tab switch, create, delete
+replacement) now resets sorting to an active `Name ascending` state instead
+of the "no sort" state described above. All other sorting semantics recorded
+in this task (comparator, missing-value handling, stability, toggle
+activation rules, filter/sort composition, same-Watchlist mutation
+preservation) remain authoritative and unchanged.

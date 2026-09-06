@@ -17,6 +17,17 @@ export interface WatchlistSort {
 	direction: SortDirection;
 }
 
+/**
+ * Central default presentation sort (TASK-032): every newly active Watchlist
+ * starts sorted by company Name ascending, as a real active sort state
+ * rather than an unsorted table. Frozen so the shared reference can't be
+ * mutated by a caller.
+ */
+export const DEFAULT_WATCHLIST_SORT: WatchlistSort = Object.freeze({
+	column: 'name',
+	direction: 'asc'
+});
+
 /** Columns compared as locale-aware, case-insensitive strings (TASK-023 §7-11); all other sortable columns are numeric. */
 const STRING_COLUMNS: ReadonlySet<WatchlistSortColumn> = new Set(['symbol', 'name', 'currency']);
 

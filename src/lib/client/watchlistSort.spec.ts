@@ -1,10 +1,58 @@
 import { describe, expect, it } from 'vitest';
-import { sortWatchlistStocks, toggleWatchlistSort, type WatchlistSort } from './watchlistSort';
+import {
+	DEFAULT_WATCHLIST_SORT,
+	sortWatchlistStocks,
+	toggleWatchlistSort,
+	type WatchlistSort
+} from './watchlistSort';
 import type { WatchlistStock } from './watchlistApi';
 
 function stock(overrides: Partial<WatchlistStock> & { symbol: string }): WatchlistStock {
 	return { dividendYield: 0, ...overrides };
 }
+
+describe('DEFAULT_WATCHLIST_SORT', () => {
+	it('represents Name ascending', () => {
+		expect(DEFAULT_WATCHLIST_SORT).toEqual({ column: 'name', direction: 'asc' });
+	});
+
+	it('is frozen so a caller cannot mutate the shared default', () => {
+		expect(Object.isFrozen(DEFAULT_WATCHLIST_SORT)).toBe(true);
+	});
+});
+
+describe('sortWatchlistStocks with the default sort', () => {
+	it('sorts by Name ascending regardless of input order (TASK-032)', () => {
+		const stocks = [
+			stock({ symbol: 'MSFT', name: 'Microsoft' }),
+			stock({ symbol: 'AAPL', name: 'Apple' }),
+			stock({ symbol: 'SAP.DE', name: 'SAP' })
+		];
+		const sorted = sortWatchlistStocks(stocks, DEFAULT_WATCHLIST_SORT);
+		expect(sorted.map((s) => s.name)).toEqual(['Apple', 'Microsoft', 'SAP']);
+	});
+
+	it('places missing names last rather than falling back to Symbol', () => {
+		const stocks = [
+			stock({ symbol: 'B', name: undefined }),
+			stock({ symbol: 'A', name: 'Alphabet' }),
+			stock({ symbol: 'C', name: undefined }),
+			stock({ symbol: 'D', name: 'Microsoft' })
+		];
+		const sorted = sortWatchlistStocks(stocks, DEFAULT_WATCHLIST_SORT);
+		expect(sorted.map((s) => s.symbol)).toEqual(['A', 'D', 'B', 'C']);
+	});
+
+	it('preserves stable order for equal names', () => {
+		const stocks = [
+			stock({ symbol: 'B', name: 'Same' }),
+			stock({ symbol: 'A', name: 'Same' }),
+			stock({ symbol: 'C', name: 'Same' })
+		];
+		const sorted = sortWatchlistStocks(stocks, DEFAULT_WATCHLIST_SORT);
+		expect(sorted.map((s) => s.symbol)).toEqual(['B', 'A', 'C']);
+	});
+});
 
 describe('sortWatchlistStocks', () => {
 	it('preserves input order when no sort is active', () => {

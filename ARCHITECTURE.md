@@ -716,12 +716,38 @@ sorted through interactive headers. The `Delete` column is not sortable.
 Sorting is a client-side presentation concern operating only on the stock
 data already loaded in the browser; it performs no API request.
 
-Activation rules:
+**Default sort (TASK-032, superseding TASK-023's "initial state is
+unsorted" rule below only for the reset/default state):** the default
+stock-table presentation sort for every newly active Watchlist is company
+Name ascending. This is a real active sort state, not merely a reordering of
+rows: the Name column reports `aria-sort="ascending"` immediately, and a
+subsequent click on Name therefore toggles to descending rather than
+activating ascending again. Concretely:
 
-* the initial table state is unsorted, showing persisted Watchlist/API
-  order;
+```text
+initial active Watchlist load
+→ Name ascending
+
+active Watchlist changes (tab switch, create, delete replacement)
+→ Name ascending
+
+same-Watchlist mutation (add/remove stock, Target Price save, filtering,
+investment allocation)
+→ preserve the current sort, whatever it is
+```
+
+There is no per-Watchlist sort memory: every active-Watchlist transition
+resets to Name ascending regardless of what was manually selected on the
+previously active Watchlist. This default sort is purely a client-side
+presentation concern like the rest of §13.1 — it does not reorder or persist
+the underlying Watchlist symbol order, does not affect the REST
+response/composition order (§9.5), and introduces no server-side sorting.
+
+Activation rules (TASK-023, still authoritative for all manual interaction):
+
 * the first click on a sortable header activates ascending sorting on that
-  column;
+  column (or, from the Name-ascending default, toggles Name to descending —
+  see above);
 * clicking the currently active column again toggles between ascending and
   descending; there is no third/unsorted state once a column is active;
 * clicking a different column switches to that column, always starting
@@ -742,10 +768,11 @@ Filtering happens before sorting: the pipeline is
 `activeView.stocks -> filterStocksByCompanyName -> sortWatchlistStocks ->
 visibleStocks`. Sorting never affects `totalStockCount`/`filteredStockCount`,
 which remain derived from `activeView.stocks`/`filteredStocks`. Sort state
-resets whenever the active Watchlist itself changes (tab switch, Watchlist
-creation, deletion transition) but is preserved across same-Watchlist
-mutations (Target Price update, stock add/remove), with affected rows
-repositioning to their new sorted location.
+resets to the Name-ascending default (see above) whenever the active
+Watchlist itself changes (tab switch, Watchlist creation, deletion
+transition) but is preserved across same-Watchlist mutations (Target Price
+update, stock add/remove), with affected rows repositioning to their new
+sorted location.
 
 ### 13.2 Filtering
 

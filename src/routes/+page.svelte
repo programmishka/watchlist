@@ -23,6 +23,7 @@
 	} from '$lib/client/watchlistShell';
 	import { filterStocksByCompanyName, formatStockCount } from '$lib/client/watchlistFilter';
 	import {
+		DEFAULT_WATCHLIST_SORT,
 		sortWatchlistStocks,
 		toggleWatchlistSort,
 		type WatchlistSort,
@@ -67,9 +68,10 @@
 	// the active Watchlist itself changes rather than persisted anywhere.
 	let companyNameFilter = $state('');
 
-	// UI-local table sort (TASK-023); reset at the same active-Watchlist
-	// transitions as the filter, never persisted anywhere.
-	let sort = $state<WatchlistSort | undefined>(undefined);
+	// UI-local table sort (TASK-023), defaulting to Name ascending for every
+	// newly active Watchlist (TASK-032); reset to that default at the same
+	// active-Watchlist transitions as the filter, never persisted anywhere.
+	let sort = $state<WatchlistSort>(DEFAULT_WATCHLIST_SORT);
 
 	// Total Savings input text and the most recent successful investment
 	// allocation (TASK-024 §12/§50): a temporary, unpersisted UI-state result
@@ -163,7 +165,7 @@
 				watchlists = response.watchlists;
 				activeWatchlistId = watchlistId;
 				companyNameFilter = '';
-				sort = undefined;
+				sort = DEFAULT_WATCHLIST_SORT;
 				investmentAllocation = undefined;
 			},
 			onActiveWatchlistLoaded: (view) => {
@@ -200,7 +202,7 @@
 				newWatchlistName = '';
 				createStatus = 'idle';
 				companyNameFilter = '';
-				sort = undefined;
+				sort = DEFAULT_WATCHLIST_SORT;
 				investmentAllocation = undefined;
 			},
 			onActiveWatchlistLoading: () => {
@@ -243,7 +245,7 @@
 				activeWatchlistId = response.activeWatchlistId;
 				deleteStatus = 'idle';
 				companyNameFilter = '';
-				sort = undefined;
+				sort = DEFAULT_WATCHLIST_SORT;
 				investmentAllocation = undefined;
 			},
 			onNoWatchlistsRemaining: () => {
