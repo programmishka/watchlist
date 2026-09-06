@@ -14,9 +14,9 @@ For every stock, the user can define a Target Price representing the price again
 
 This makes the Watchlist more than a conventional price tracker:
 
-* a stock trading relatively close to or below its Target Price can receive a higher investment weighting;
-* a stock trading far above its Target Price can receive a lower weighting or no allocation;
-* Target Prices remain the user's own investment assumptions rather than values supplied by a market-data provider.
+- a stock trading relatively close to or below its Target Price can receive a higher investment weighting;
+- a stock trading far above its Target Price can receive a lower weighting or no allocation;
+- Target Prices remain the user's own investment assumptions rather than values supplied by a market-data provider.
 
 ### Savings Plan Allocation
 
@@ -61,13 +61,13 @@ The Watchlist can simply serve as a value-oriented decision aid for individual i
 
 The Watchlist enriches the decision view with market information such as:
 
-* current market price;
-* company name and trading currency;
-* dividend yield;
-* market capitalization normalized to billions of USD;
-* Target Price;
-* distance to Target Price;
-* calculated savings allocation.
+- current market price;
+- company name and trading currency;
+- dividend yield;
+- market capitalization normalized to billions of USD;
+- Target Price;
+- distance to Target Price;
+- calculated savings allocation.
 
 Watchlists can be filtered by company name and sorted by their financial columns. Multiple Watchlists are supported per user.
 
@@ -179,15 +179,15 @@ An AI agent acted as an **architect and engineering partner**.
 
 Together, we:
 
-* translated the investment workflow into explicit business rules;
-* designed the application architecture;
-* selected technologies and integration boundaries;
-* investigated external APIs and Cloudflare behavior;
-* identified ambiguities before implementation;
-* documented architectural decisions in `ARCHITECTURE.md`;
-* decomposed the implementation into narrowly scoped tasks;
-* reviewed the implementation reports after every task;
-* decided what should be implemented next.
+- translated the investment workflow into explicit business rules;
+- designed the application architecture;
+- selected technologies and integration boundaries;
+- investigated external APIs and Cloudflare behavior;
+- identified ambiguities before implementation;
+- documented architectural decisions in `ARCHITECTURE.md`;
+- decomposed the implementation into narrowly scoped tasks;
+- reviewed the implementation reports after every task;
+- decided what should be implemented next.
 
 The architect agent did not simply hand the complete application to the implementation agent. Each capability was discussed and specified before implementation.
 
@@ -197,14 +197,14 @@ A separate coding agent implemented the tasks with **Claude Code**.
 
 Each task was provided as a Markdown specification under `docs/tasks/` with:
 
-* goal and context;
-* required behavior;
-* architecture constraints;
-* non-goals;
-* test scenarios;
-* acceptance criteria;
-* verification commands;
-* completion-report requirements.
+- goal and context;
+- required behavior;
+- architecture constraints;
+- non-goals;
+- test scenarios;
+- acceptance criteria;
+- verification commands;
+- completion-report requirements.
 
 The implementation agent was deliberately constrained from making unrelated architectural decisions, proceeding automatically to the next task, or committing/pushing changes.
 
@@ -255,14 +255,14 @@ Early tasks established the technical foundation and validated risky integration
 
 Examples of this process include:
 
-* validating `yahoo-finance2` with real international symbols and inside the Cloudflare `workerd` runtime before adopting it;
-* separating Yahoo Finance behind `MarketDataProvider`;
-* separating exchange rates behind `ExchangeRateProvider`;
-* implementing financial formulas as pure domain functions with explicit edge-case tests;
-* keeping Target Prices independent from Watchlist membership;
-* introducing permanent Playwright tests as soon as substantial browser workflows existed;
-* verifying critical integration paths against real Cloudflare KV and external providers;
-* correcting the production authentication architecture when the first real deployment exposed a Cloudflare Static Assets limitation that local testing could not reproduce.
+- validating `yahoo-finance2` with real international symbols and inside the Cloudflare `workerd` runtime before adopting it;
+- separating Yahoo Finance behind `MarketDataProvider`;
+- separating exchange rates behind `ExchangeRateProvider`;
+- implementing financial formulas as pure domain functions with explicit edge-case tests;
+- keeping Target Prices independent from Watchlist membership;
+- introducing permanent Playwright tests as soon as substantial browser workflows existed;
+- verifying critical integration paths against real Cloudflare KV and external providers;
+- correcting the production authentication architecture when the first real deployment exposed a Cloudflare Static Assets limitation that local testing could not reproduce.
 
 That last case was particularly valuable: the initial architecture used Cloudflare's `ctx.access` identity context. Production deployment demonstrated that the Static Assets router does not forward that context to the application Worker. The architecture was reviewed rather than patched around, and production authentication was changed to cryptographically validated Cloudflare Access JWTs.
 
@@ -299,6 +299,8 @@ Review and regression verification
 ```
 
 This allowed the application to evolve from actual usage rather than from an upfront feature list alone.
+
+The first such observation-driven change (TASK-029) came from noticing that a lowercase entry like `aapl` was sent to the market-data provider unchanged instead of as `AAPL`. Stock symbols are now trimmed, normalized to uppercase, and syntax-validated before being checked against the market-data provider or saved, so `aapl` and `AAPL` are treated as the same stock.
 
 The repository therefore documents not only the resulting software, but also the **engineering process used to build and evolve it with AI agents under explicit human product and architectural control**.
 

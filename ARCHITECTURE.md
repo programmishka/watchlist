@@ -523,20 +523,67 @@ When the user returns to the application, that watchlist should be selected when
 
 The user enters a stock symbol and confirms using the add action.
 
-The server trims surrounding whitespace from the input, then resolves the
-exact trimmed symbol using the configured market-data provider.
+**Normalization and syntax validation (TASK-029, superseding TASK-012's
+casing decision — see §12.1.1 below):** the server normalizes the raw input
+— trim, then uppercase, in that order — and validates the normalized result
+against the stock-symbol grammar:
 
-If successful, that exact trimmed input — not the provider-returned symbol,
-and without case normalization — is added to the current watchlist. The
-provider-returned symbol is evidence the lookup succeeded, not a
-canonicalization instruction. The market data retrieved for this validation
-is transient and is not persisted; the next watchlist query retrieves
-current market data normally.
+```text
+^[A-Z0-9]+(?:[.-][A-Z0-9]+)*$
+```
 
-If the provider does not recognize the symbol, the addition is rejected. If
-the provider itself is unavailable, that is a distinct failure from an
+before ever contacting the market-data provider. `.` and `-` are accepted
+only as separators between non-empty alphanumeric components (numeric
+components are supported, e.g. `0700.HK`, `7203.T`); empty input,
+whitespace-only input, and repeated/mixed/leading/trailing separators
+(`SAP..DE`, `SAP--DE`, `.SAP`, `SAP.`) are rejected. No arbitrary maximum
+length is imposed. This rule is implemented once, as a small pure/dependency-
+free module usable from both server and browser code (`$lib/shared/`, never
+`$lib/server/`, so the browser can apply the same UX-optimization check —
+see §26.3), and is authoritative only on the server.
+
+A syntactically invalid symbol is rejected immediately as `InvalidSymbolError`
+(`INVALID_STOCK_SYMBOL` at the HTTP boundary, §24.3) — the market-data
+provider is never called for it. Only a syntactically valid, normalized
+symbol proceeds to provider-backed validation using the configured
+market-data provider's existing `getQuote()` lookup.
+
+If that lookup succeeds, the **normalized** symbol — not the raw input, and
+not the provider-returned symbol — is added to the current watchlist and is
+what gets persisted. The provider-returned symbol remains evidence the
+lookup succeeded, not a canonicalization instruction. The market data
+retrieved for this validation is transient and is not persisted; the next
+watchlist query retrieves current market data normally.
+
+If the provider does not recognize the (syntactically valid) symbol, the
+addition is rejected as `UNKNOWN_STOCK_SYMBOL` — distinct from a syntax
+failure. If the provider itself is unavailable, that is a distinct provider
+failure (`MARKET_DATA_UNAVAILABLE`) from either a syntax failure or an
 unrecognized symbol, and the addition is likewise rejected rather than
 silently succeeding.
+
+Because newly added symbols are now uppercase-canonical, `AAPL`/`aapl`/`AaPl`
+entered as new additions all normalize to the same stored symbol, and a
+second such addition is rejected as a normal duplicate (§12.2) — there is no
+separate case-insensitive duplicate mechanism. TASK-029 introduces no
+migration: Watchlists/documents persisted before TASK-029 may still contain
+non-canonical (e.g. lowercase) symbols, and those are left unchanged until a
+future task explicitly addresses them.
+
+#### 12.1.1 Product Scope: Equities
+
+V2's intended scope is:
+
+> Watchlist manages equities representing companies that can be individually
+> valued.
+
+ETFs, options, funds, cryptocurrencies, and other non-equity instruments are
+outside the intended product scope. TASK-029 establishes only normalization
+and syntax validation; it deliberately does not enforce this at the
+provider/data level (e.g. rejecting a syntactically valid but non-equity
+symbol). Provider-backed `quoteType === EQUITY` enforcement, and a
+`MarketDataProvider.resolveSymbol()`-style capability, are explicitly
+deferred to a later task (TASK-030).
 
 Adding a stock does not create, update, or load a target price. If a target price already exists for:
 
@@ -1179,7 +1226,9 @@ Errors use a stable JSON shape independent of internal exception class names:
 { "error": { "code": "DUPLICATE_SYMBOL", "message": "The symbol already exists in this watchlist." } }
 ```
 
-Supported codes: `UNAUTHENTICATED`, `INVALID_REQUEST`, `WATCHLIST_NOT_FOUND`, `NO_ACTIVE_WATCHLIST`, `INVALID_WATCHLIST_NAME`, `INVALID_SYMBOL`, `UNKNOWN_STOCK_SYMBOL`, `DUPLICATE_SYMBOL`, `SYMBOL_NOT_FOUND`, `INVALID_TARGET_PRICE`, `INVALID_TOTAL_SAVINGS`, `MARKET_DATA_UNAVAILABLE`, `PERSISTENCE_ERROR`, `INTERNAL_ERROR`. Business/domain/provider exception classes remain independent of HTTP; one small server-side mapping helper centralizes the translation to status + code + message, so routes never expose raw Yahoo/Frankfurter/Cloudflare errors or reproduce this mapping themselves.
+Supported codes: `UNAUTHENTICATED`, `INVALID_REQUEST`, `WATCHLIST_NOT_FOUND`, `NO_ACTIVE_WATCHLIST`, `INVALID_WATCHLIST_NAME`, `INVALID_SYMBOL`, `INVALID_STOCK_SYMBOL`, `UNKNOWN_STOCK_SYMBOL`, `DUPLICATE_SYMBOL`, `SYMBOL_NOT_FOUND`, `INVALID_TARGET_PRICE`, `INVALID_TOTAL_SAVINGS`, `MARKET_DATA_UNAVAILABLE`, `PERSISTENCE_ERROR`, `INTERNAL_ERROR`. Business/domain/provider exception classes remain independent of HTTP; one small server-side mapping helper centralizes the translation to status + code + message, so routes never expose raw Yahoo/Frankfurter/Cloudflare errors or reproduce this mapping themselves.
+
+`INVALID_STOCK_SYMBOL` (TASK-029) is specifically the stock-add syntax-validation failure (§12.1) and is distinct from `UNKNOWN_STOCK_SYMBOL` (syntactically valid, provider does not recognize it) and `MARKET_DATA_UNAVAILABLE` (provider itself failed). `INVALID_SYMBOL` remains a separate, narrower code used only by the Target Price `symbol` path parameter (empty/whitespace-only check, §20) — it does not apply the stock-symbol grammar and was intentionally left unchanged by TASK-029.
 
 Non-fatal degraded conditions (e.g. the FX provider being globally unavailable, or a post-save market-data refresh failing) are represented as warnings on an otherwise-successful response, using the same stable-code principle: `FX_PROVIDER_UNAVAILABLE`, `MARKET_DATA_UNAVAILABLE`.
 
@@ -1377,6 +1426,12 @@ TASK-025 introduced no new business behavior; it consolidated the visual languag
 * **Warning vs. error, beyond color**: both use a `.status` base plus either `.status-error` or `.status-warning` (left accent border + bold weight, not color alone). Semantically, mutation/load errors keep `role="alert"` (assertive); non-fatal data warnings (`FX_PROVIDER_UNAVAILABLE`, and the Target Price row-level `MARKET_DATA_UNAVAILABLE` case) use `role="status"` (polite) instead of no role, so they are discoverable by assistive technology without interrupting like an alert.
 * **Empty-state presentation**: "No watchlist has been created yet." and "This watchlist is empty." share a bordered `.empty-state` treatment; "No stocks match the current filter." intentionally stays a plain, `font-style: italic` line via `.filtered-empty` so a temporarily-filtered watchlist is never visually confused with a genuinely empty one (§12.4, §24 of the task).
 * **Viewport strategy confirmed**: manual and Playwright verification target 375px (mobile), 768px (intermediate), and 1280px (desktop) as the three representative widths (§14). No additional breakpoints were introduced. The table's existing horizontal-scroll-in-container strategy (§14.2) is unchanged and, by design, can still activate on wider viewports once all ten columns exceed the content width — this is the same accepted mechanism, not a new mobile-only behavior.
+
+### 26.9 Stock Symbol Normalization and Syntax Validation UI (TASK-029)
+
+The Stock symbol input (§26.3) uppercases characters live as the user types, via a plain `oninput` handler (`value.toUpperCase()`) rather than `bind:value` — punctuation (`.`/`-`) is preserved unchanged, and trimming/full grammar validation is deliberately deferred to submission rather than applied per keystroke. The normalization/validation rule itself (`normalizeStockSymbol`, `isValidStockSymbol`, `parseStockSymbol`) lives in `src/lib/shared/stockSymbol.ts` — a new pure, dependency-free module (no provider, network, SvelteKit request object, or persistence dependency) importable from both server application code (`AddStockToWatchlistService`) and browser code, deliberately placed outside `$lib/server` so the browser bundle can include it. This avoids maintaining two separate regex definitions that could drift.
+
+`addStockToActiveWatchlist` (`src/lib/client/watchlistShell.ts`) normalizes and validates the trimmed symbol with `parseStockSymbol` before calling the API; a syntactically invalid symbol short-circuits through a new `onInvalidSymbol(normalizedSymbol)` handler instead of `onAdding`/`onAddFailed`/`onAdded` — no request is sent. `+page.svelte` uses this to redisplay the normalized (uppercased) text in the input for correction and show a local validation message (`INVALID_STOCK_SYMBOL_MESSAGE`, exported alongside), taking precedence over any previous server-reported mutation error. This client check is a UX optimization only (§28 of the task) — the server independently normalizes and validates every request regardless of what the browser sent, so a direct/bypassing API request receives the same `INVALID_STOCK_SYMBOL` rejection.
 
 ---
 

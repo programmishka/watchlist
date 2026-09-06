@@ -87,8 +87,22 @@ describe('AddStockToWatchlistService.addStock', () => {
 		expect(result.watchlists[0].symbols).toEqual(['GAW.L']);
 	});
 
-	it.each(['', '   '])(
-		'rejects %j without calling the provider or mutating the Watchlist',
+	it.each([
+		'',
+		'   ',
+		'AAPL!',
+		'SAP..DE',
+		'SAP--DE',
+		'SAP.-DE',
+		'SAP-.DE',
+		'SAP_DE',
+		'SAP DE',
+		'.SAP',
+		'SAP.',
+		'-SAP',
+		'SAP-'
+	])(
+		'rejects %j as syntactically invalid without calling the provider or mutating the Watchlist',
 		async (symbol) => {
 			const watchlistRepository = new FakeWatchlistRepository(
 				new Map([['user-1', watchlistDocument('wl-1', [])]])
@@ -193,17 +207,63 @@ describe('AddStockToWatchlistService.addStock', () => {
 		expect(result.watchlists[0].symbols).toEqual(['AAPL']);
 	});
 
-	it('does not normalize casing', async () => {
+	it('normalizes lowercase input to uppercase before the provider lookup and persists the normalized symbol (TASK-029, supersedes TASK-012)', async () => {
 		const watchlistRepository = new FakeWatchlistRepository(
 			new Map([['user-1', watchlistDocument('wl-1', [])]])
 		);
 		const watchlistService = new WatchlistService(watchlistRepository);
-		const marketDataProvider = new FakeMarketDataProvider(new Map([['aapl', { symbol: 'aapl' }]]));
+		const marketDataProvider = new FakeMarketDataProvider(new Map([['AAPL', { symbol: 'AAPL' }]]));
 		const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
 
 		const result = await service.addStock('user-1', 'wl-1', 'aapl');
 
-		expect(result.watchlists[0].symbols).toEqual(['aapl']);
+		expect(marketDataProvider.getQuoteCalls).toEqual(['AAPL']);
+		expect(result.watchlists[0].symbols).toEqual(['AAPL']);
+	});
+
+	it('normalizes a lowercase exchange-suffix symbol to uppercase for both the provider and persistence', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', [])]])
+		);
+		const watchlistService = new WatchlistService(watchlistRepository);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([['SAP.DE', { symbol: 'SAP.DE' }]])
+		);
+		const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
+
+		const result = await service.addStock('user-1', 'wl-1', 'sap.de');
+
+		expect(marketDataProvider.getQuoteCalls).toEqual(['SAP.DE']);
+		expect(result.watchlists[0].symbols).toEqual(['SAP.DE']);
+	});
+
+	it('normalizes a lowercase hyphenated symbol to uppercase, preserving the hyphen', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', [])]])
+		);
+		const watchlistService = new WatchlistService(watchlistRepository);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([['HEXA-B.ST', { symbol: 'HEXA-B.ST' }]])
+		);
+		const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
+
+		const result = await service.addStock('user-1', 'wl-1', 'hexa-b.st');
+
+		expect(marketDataProvider.getQuoteCalls).toEqual(['HEXA-B.ST']);
+		expect(result.watchlists[0].symbols).toEqual(['HEXA-B.ST']);
+	});
+
+	it('rejects a case-only duplicate of an already-persisted canonical symbol', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['AAPL'])]])
+		);
+		const watchlistService = new WatchlistService(watchlistRepository);
+		const marketDataProvider = new FakeMarketDataProvider(new Map([['AAPL', { symbol: 'AAPL' }]]));
+		const service = new AddStockToWatchlistService(marketDataProvider, watchlistService);
+
+		await expect(service.addStock('user-1', 'wl-1', 'aapl')).rejects.toThrow(DuplicateSymbolError);
+		expect(marketDataProvider.getQuoteCalls).toEqual(['AAPL']);
+		expect(watchlistRepository.saveCalls).toHaveLength(0);
 	});
 
 	it('requires no TargetPriceRepository/TargetPriceService dependency (verified by the constructor signature)', async () => {

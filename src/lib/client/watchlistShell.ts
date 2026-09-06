@@ -1,3 +1,4 @@
+import { parseStockSymbol } from '../shared/stockSymbol';
 import {
 	addStock,
 	calculateInvestmentAllocation,
@@ -13,6 +14,10 @@ import {
 	type WatchlistsMetadataResponse,
 	type WatchlistView
 } from './watchlistApi';
+
+/** User-facing message for a client-side syntax rejection (TASK-029 §29); mirrors the server's `INVALID_STOCK_SYMBOL` wording. */
+export const INVALID_STOCK_SYMBOL_MESSAGE =
+	'Invalid stock symbol format. Use letters, numbers, dots, or hyphens.';
 
 export interface WatchlistShellApi {
 	loadWatchlists: typeof loadWatchlists;
@@ -250,14 +255,25 @@ export interface AddStockHandlers {
 	onAdding: () => void;
 	onAddFailed: (error: WatchlistApiError) => void;
 	onAdded: (view: WatchlistView) => void;
+	/**
+	 * Called instead of `onAdding`/`onAddFailed`/`onAdded` when the
+	 * normalized symbol fails the shared syntax rule (TASK-029 §26-28) — no
+	 * API call is made. Receives the normalized (trimmed, uppercased) symbol
+	 * so the caller can redisplay it for correction.
+	 */
+	onInvalidSymbol: (normalizedSymbol: string) => void;
 }
 
 /**
- * Implements TASK-020 §1-14: sends the trimmed symbol and, on success,
- * replaces `activeView` directly from the mutation response with no
- * follow-up composed-Watchlist GET. A blank/whitespace-only symbol is
- * refused before any request is sent, and a failure leaves the previous
- * active view untouched so the caller can preserve the entered symbol.
+ * Implements TASK-020 §1-14 and TASK-029 §17-28: normalizes (trims,
+ * uppercases) and syntactically validates the symbol using the same shared
+ * rule the server enforces, sending the normalized symbol only when valid.
+ * On success, `activeView` is replaced directly from the mutation response
+ * with no follow-up composed-Watchlist GET. A blank/whitespace-only symbol
+ * is refused before any request is sent (or validation), and a failure
+ * leaves the previous active view untouched so the caller can preserve the
+ * entered symbol. The server remains authoritative — this client-side check
+ * is a UX optimization only.
  */
 export async function addStockToActiveWatchlist(
 	api: WatchlistShellApi,
@@ -270,10 +286,16 @@ export async function addStockToActiveWatchlist(
 		return;
 	}
 
+	const parsed = parseStockSymbol(trimmedSymbol);
+	if (!parsed.valid) {
+		handlers.onInvalidSymbol(parsed.symbol);
+		return;
+	}
+
 	handlers.onAdding();
 
 	try {
-		const view = await api.addStock(watchlistId, trimmedSymbol);
+		const view = await api.addStock(watchlistId, parsed.symbol);
 		handlers.onAdded(view);
 	} catch (error) {
 		handlers.onAddFailed(toWatchlistApiError(error));

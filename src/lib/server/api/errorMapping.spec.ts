@@ -29,7 +29,7 @@ describe('mapErrorToResponse', () => {
 		[new UnauthenticatedError(), 401, 'UNAUTHENTICATED'],
 		[new InvalidRequestError(), 400, 'INVALID_REQUEST'],
 		[new InvalidWatchlistNameError('  '), 400, 'INVALID_WATCHLIST_NAME'],
-		[new InvalidWatchlistSymbolError(''), 400, 'INVALID_SYMBOL'],
+		[new InvalidWatchlistSymbolError(''), 400, 'INVALID_STOCK_SYMBOL'],
 		[new InvalidTargetPriceSymbolError(''), 400, 'INVALID_SYMBOL'],
 		[new InvalidTargetPriceError(-1), 400, 'INVALID_TARGET_PRICE'],
 		[new InvalidTotalSavingsError(-1), 400, 'INVALID_TOTAL_SAVINGS'],

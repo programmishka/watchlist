@@ -15,6 +15,7 @@
 		createWatchlistAndActivate,
 		defaultWatchlistShellApi,
 		deleteActiveWatchlistAndTransition,
+		INVALID_STOCK_SYMBOL_MESSAGE,
 		loadInitialWatchlists,
 		removeStockFromActiveWatchlist,
 		setTargetPriceForActiveStock,
@@ -56,6 +57,9 @@
 	let newStockSymbol = $state('');
 	let stockMutationBusy = $state(false);
 	let stockMutationError = $state<WatchlistApiError | undefined>(undefined);
+	// Local syntax-validation feedback (TASK-029 §26/§29), distinct from a
+	// server-reported mutation error; takes precedence when both are set.
+	let stockSymbolValidationError = $state<string | undefined>(undefined);
 
 	let targetPriceMutationBusy = $state(false);
 
@@ -263,6 +267,12 @@
 		});
 	}
 
+	function handleStockSymbolInput(event: Event) {
+		// Immediate uppercase UX (TASK-029 §24-25): only case is transformed
+		// while typing; trimming/full syntax validation happens on submit.
+		newStockSymbol = (event.currentTarget as HTMLInputElement).value.toUpperCase();
+	}
+
 	function handleAddStockSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		if (!activeWatchlistId || addStockDisabled) {
@@ -270,7 +280,13 @@
 		}
 
 		addStockToActiveWatchlist(defaultWatchlistShellApi, activeWatchlistId, newStockSymbol, {
+			onInvalidSymbol: (normalizedSymbol) => {
+				newStockSymbol = normalizedSymbol;
+				stockMutationError = undefined;
+				stockSymbolValidationError = INVALID_STOCK_SYMBOL_MESSAGE;
+			},
 			onAdding: () => {
+				stockSymbolValidationError = undefined;
 				stockMutationBusy = true;
 				stockMutationError = undefined;
 			},
@@ -465,7 +481,8 @@
 							id="new-stock-symbol"
 							class="field-input add-stock-input"
 							type="text"
-							bind:value={newStockSymbol}
+							value={newStockSymbol}
+							oninput={handleStockSymbolInput}
 							disabled={managementBusy}
 							autocomplete="off"
 						/>
@@ -480,7 +497,9 @@
 						</button>
 					</form>
 
-					{#if stockMutationError}
+					{#if stockSymbolValidationError}
+						<p class="status status-error" role="alert">{stockSymbolValidationError}</p>
+					{:else if stockMutationError}
 						<p class="status status-error" role="alert">{stockMutationError.message}</p>
 					{/if}
 				{/if}

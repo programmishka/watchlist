@@ -38,10 +38,14 @@ export function mapErrorToResponse(error: unknown): Response {
 	if (error instanceof InvalidWatchlistNameError) {
 		return errorResponse(400, 'INVALID_WATCHLIST_NAME', 'The watchlist name is invalid.');
 	}
-	if (
-		error instanceof InvalidWatchlistSymbolError ||
-		error instanceof InvalidTargetPriceSymbolError
-	) {
+	if (error instanceof InvalidWatchlistSymbolError) {
+		return errorResponse(
+			400,
+			'INVALID_STOCK_SYMBOL',
+			'Invalid stock symbol format. Use letters, numbers, dots, or hyphens.'
+		);
+	}
+	if (error instanceof InvalidTargetPriceSymbolError) {
 		return errorResponse(400, 'INVALID_SYMBOL', 'The stock symbol is invalid.');
 	}
 	if (error instanceof InvalidTargetPriceError) {

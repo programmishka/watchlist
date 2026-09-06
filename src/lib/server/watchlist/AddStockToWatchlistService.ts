@@ -1,5 +1,6 @@
 import type { MarketDataProvider } from '../market-data/MarketDataProvider';
 import type { WatchlistsDocument } from '../persistence/WatchlistRepository';
+import { parseStockSymbol } from '../../shared/stockSymbol';
 import { InvalidSymbolError, UnknownStockSymbolError } from './WatchlistServiceErrors';
 import type { WatchlistService } from './WatchlistService';
 
@@ -9,6 +10,12 @@ import type { WatchlistService } from './WatchlistService';
  * leaves open (TASK-009): it persists any well-formed symbol string without
  * checking Yahoo recognizes it. All Watchlist mutation rules (duplicate
  * detection, Watchlist lookup, persistence) remain owned by `WatchlistService`.
+ *
+ * TASK-029 supersedes TASK-012's no-canonicalization/no-case-normalization
+ * decision: the input is normalized (trimmed, uppercased) and syntactically
+ * validated before it ever reaches the provider, and that normalized symbol
+ * — not the raw input — is what the provider validates and `WatchlistService`
+ * persists.
  */
 export class AddStockToWatchlistService {
 	constructor(
@@ -17,16 +24,16 @@ export class AddStockToWatchlistService {
 	) {}
 
 	async addStock(userId: string, watchlistId: string, symbol: string): Promise<WatchlistsDocument> {
-		const trimmedSymbol = symbol.trim();
-		if (trimmedSymbol.length === 0) {
+		const parsed = parseStockSymbol(symbol);
+		if (!parsed.valid) {
 			throw new InvalidSymbolError(symbol);
 		}
 
-		const marketData = await this.marketDataProvider.getQuote(trimmedSymbol);
+		const marketData = await this.marketDataProvider.getQuote(parsed.symbol);
 		if (!marketData) {
-			throw new UnknownStockSymbolError(trimmedSymbol);
+			throw new UnknownStockSymbolError(parsed.symbol);
 		}
 
-		return this.watchlistService.addSymbol(userId, watchlistId, trimmedSymbol);
+		return this.watchlistService.addSymbol(userId, watchlistId, parsed.symbol);
 	}
 }

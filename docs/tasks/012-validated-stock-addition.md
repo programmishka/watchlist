@@ -4,6 +4,17 @@
 
 Done
 
+> **Superseded in part by TASK-029.** This task's "no symbol
+> canonicalization"/"no case normalization" decision (§6, §7, and the related
+> acceptance criteria/tests) reflected the correct starting point at the
+> time, but production usage later showed it caused inconsistent behavior
+> (e.g. `aapl` reaching the provider in lowercase). TASK-029 introduced
+> mandatory trim + uppercase normalization and syntax validation ahead of
+> provider validation, and the normalized symbol — not the exact raw input —
+> is now what is persisted. The provider-validation orchestration and error
+> model this task established (§1-§3, §8-§20) remain in place; only the
+> input-casing/canonicalization decision changed.
+
 ## Goal
 
 Implement the server-side application use case for adding a stock symbol to a Watchlist only after the symbol has been successfully resolved by the configured `MarketDataProvider`.

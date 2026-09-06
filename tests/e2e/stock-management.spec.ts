@@ -277,6 +277,210 @@ test.describe('Stock management', () => {
 		await expect(page.getByRole('table')).toHaveCount(0);
 	});
 
+	test('normalizes lowercase input to uppercase as it is typed and submits the uppercase symbol', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page);
+		const addCalls = await mockAddStock(page, WATCHLIST_ID, (symbol) => ({
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [SAP_DE_STOCK, GAW_L_STOCK, { ...AAPL_STOCK, symbol }],
+			warnings: []
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('aapl');
+
+		await expect(input).toHaveValue('AAPL');
+
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		expect(addCalls.calls).toEqual(['AAPL']);
+		await expect(page.getByText('AAPL')).toBeVisible();
+	});
+
+	test('normalizes a lowercase exchange-suffix symbol to uppercase', async ({ page }) => {
+		await mockWatchlistsMetadata(page, {
+			activeWatchlistId: WATCHLIST_ID,
+			watchlists: [{ id: WATCHLIST_ID, name: 'Main' }]
+		});
+		await mockWatchlistView(page, WATCHLIST_ID, {
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [GAW_L_STOCK],
+			warnings: []
+		});
+		const addCalls = await mockAddStock(page, WATCHLIST_ID, (symbol) => ({
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [GAW_L_STOCK, { ...SAP_DE_STOCK, symbol }],
+			warnings: []
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('sap.de');
+		await expect(input).toHaveValue('SAP.DE');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		expect(addCalls.calls).toEqual(['SAP.DE']);
+	});
+
+	test('normalizes a lowercase hyphenated symbol to uppercase', async ({ page }) => {
+		const HEXA_STOCK = { ...GAW_L_STOCK, symbol: 'HEXA-B.ST', name: 'Hexagon AB' };
+		await mockWatchlistsMetadata(page, {
+			activeWatchlistId: WATCHLIST_ID,
+			watchlists: [{ id: WATCHLIST_ID, name: 'Main' }]
+		});
+		await mockWatchlistView(page, WATCHLIST_ID, {
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [SAP_DE_STOCK],
+			warnings: []
+		});
+		const addCalls = await mockAddStock(page, WATCHLIST_ID, (symbol) => ({
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [SAP_DE_STOCK, { ...HEXA_STOCK, symbol }],
+			warnings: []
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('hexa-b.st');
+		await expect(input).toHaveValue('HEXA-B.ST');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		expect(addCalls.calls).toEqual(['HEXA-B.ST']);
+	});
+
+	test('accepts a numeric symbol with an exchange suffix', async ({ page }) => {
+		await mockSingleWatchlist(page);
+		const addCalls = await mockAddStock(page, WATCHLIST_ID, (symbol) => ({
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [SAP_DE_STOCK, GAW_L_STOCK, { ...AAPL_STOCK, symbol, name: 'Tencent' }],
+			warnings: []
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('0700.hk');
+		await expect(input).toHaveValue('0700.HK');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		expect(addCalls.calls).toEqual(['0700.HK']);
+		await expect(page.getByText('0700.HK')).toBeVisible();
+	});
+
+	test('rejects an invalid character locally without sending a request', async ({ page }) => {
+		await mockSingleWatchlist(page);
+		const addCalls = await mockAddStock(page, WATCHLIST_ID, () => ({
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [SAP_DE_STOCK, GAW_L_STOCK],
+			warnings: []
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('AAPL!');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		await expect(page.getByRole('alert')).toContainText('Use letters, numbers, dots, or hyphens.');
+		await expect(input).toHaveValue('AAPL!');
+		expect(addCalls.calls).toHaveLength(0);
+	});
+
+	test('rejects an invalid repeated separator locally without sending a request', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page);
+		const addCalls = await mockAddStock(page, WATCHLIST_ID, () => ({
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [SAP_DE_STOCK, GAW_L_STOCK],
+			warnings: []
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('SAP..DE');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		await expect(page.getByRole('alert')).toContainText('Use letters, numbers, dots, or hyphens.');
+		expect(addCalls.calls).toHaveLength(0);
+	});
+
+	test('shows the unknown-symbol message, not local syntax validation, for a syntactically valid unknown symbol', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page);
+		const addCalls = await mockAddStock(page, WATCHLIST_ID, () => ({
+			status: 422,
+			body: { error: { code: 'UNKNOWN_STOCK_SYMBOL', message: 'The symbol could not be found.' } }
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('ZZZZZZ');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		expect(addCalls.calls).toEqual(['ZZZZZZ']);
+		await expect(page.getByRole('alert')).toContainText('The symbol could not be found.');
+		await expect(page.getByRole('alert')).not.toContainText(
+			'Use letters, numbers, dots, or hyphens.'
+		);
+	});
+
+	test('distinguishes a provider failure from both syntax-invalid and unknown-symbol errors', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page);
+		await mockAddStock(page, WATCHLIST_ID, () => ({
+			status: 503,
+			body: {
+				error: { code: 'MARKET_DATA_UNAVAILABLE', message: 'Market data is currently unavailable.' }
+			}
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('AAPL');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		const alert = page.getByRole('alert');
+		await expect(alert).toContainText('Market data is currently unavailable.');
+		await expect(alert).not.toContainText('Use letters, numbers, dots, or hyphens.');
+		await expect(alert).not.toContainText('could not be found');
+	});
+
+	test('submits the canonical uppercase symbol for a case-only duplicate', async ({ page }) => {
+		await mockWatchlistsMetadata(page, {
+			activeWatchlistId: WATCHLIST_ID,
+			watchlists: [{ id: WATCHLIST_ID, name: 'Main' }]
+		});
+		await mockWatchlistView(page, WATCHLIST_ID, {
+			id: WATCHLIST_ID,
+			name: 'Main',
+			stocks: [AAPL_STOCK],
+			warnings: []
+		});
+		const addCalls = await mockAddStock(page, WATCHLIST_ID, () => ({
+			status: 409,
+			body: { error: { code: 'DUPLICATE_SYMBOL', message: 'The symbol already exists.' } }
+		}));
+
+		await page.goto('/');
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('aapl');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+
+		expect(addCalls.calls).toEqual(['AAPL']);
+		await expect(page.getByRole('alert')).toContainText('The symbol already exists.');
+	});
+
 	test('mobile layout keeps the add-stock form usable and the delete column reachable', async ({
 		page
 	}, testInfo) => {
@@ -290,6 +494,13 @@ test.describe('Stock management', () => {
 		await expect(page.getByRole('button', { name: 'Add stock' })).toBeVisible();
 		await expect(page.getByRole('table')).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Remove SAP.DE' })).toBeAttached();
+
+		const input = page.getByLabel('Stock symbol');
+		await input.fill('aapl');
+		await expect(input).toHaveValue('AAPL');
+		await input.fill('AAPL!');
+		await page.getByRole('button', { name: 'Add stock' }).click();
+		await expect(page.getByRole('alert')).toContainText('Use letters, numbers, dots, or hyphens.');
 
 		const { scrollWidth, clientWidth } = await page.evaluate(() => {
 			const container = document.querySelector('table')?.parentElement;

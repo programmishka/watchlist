@@ -19,9 +19,13 @@ export class NoActiveWatchlistError extends Error {
 	}
 }
 
+/**
+ * Covers both empty/whitespace-only input and, since TASK-029, symbols that
+ * fail the stock-symbol syntax grammar (see `$lib/shared/stockSymbol.ts`).
+ */
 export class InvalidSymbolError extends Error {
 	constructor(symbol: string) {
-		super(`Symbol must not be empty or whitespace-only. Received: ${JSON.stringify(symbol)}`);
+		super(`Symbol has invalid syntax. Received: ${JSON.stringify(symbol)}`);
 		this.name = 'InvalidSymbolError';
 	}
 }

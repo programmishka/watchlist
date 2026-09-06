@@ -442,7 +442,8 @@ describe('addStockToActiveWatchlist', () => {
 			handlers: {
 				onAdding: () => calls.push('adding'),
 				onAddFailed: () => calls.push('addFailed'),
-				onAdded: () => calls.push('added')
+				onAdded: () => calls.push('added'),
+				onInvalidSymbol: () => calls.push('invalidSymbol')
 			}
 		};
 	}
@@ -475,6 +476,52 @@ describe('addStockToActiveWatchlist', () => {
 		expect(calls).toEqual(['adding', 'added']);
 	});
 
+	it('normalizes lowercase input to uppercase before sending it', async () => {
+		const updatedView = view('wl-1');
+		const api = fakeApi({ addStock: vi.fn().mockResolvedValue(updatedView) });
+		const { handlers } = addHandlers();
+
+		await addStockToActiveWatchlist(api, 'wl-1', 'aapl', handlers);
+
+		expect(api.addStock).toHaveBeenCalledWith('wl-1', 'AAPL');
+	});
+
+	it('normalizes a lowercase exchange-suffix symbol to uppercase before sending it', async () => {
+		const updatedView = view('wl-1');
+		const api = fakeApi({ addStock: vi.fn().mockResolvedValue(updatedView) });
+		const { handlers } = addHandlers();
+
+		await addStockToActiveWatchlist(api, 'wl-1', 'sap.de', handlers);
+
+		expect(api.addStock).toHaveBeenCalledWith('wl-1', 'SAP.DE');
+	});
+
+	it('rejects syntactically invalid input locally without calling the API', async () => {
+		const api = fakeApi();
+		const { calls, handlers } = addHandlers();
+
+		await addStockToActiveWatchlist(api, 'wl-1', 'AAPL!', handlers);
+
+		expect(api.addStock).not.toHaveBeenCalled();
+		expect(calls).toEqual(['invalidSymbol']);
+	});
+
+	it('passes the normalized symbol to onInvalidSymbol so the input can be corrected in place', async () => {
+		const api = fakeApi();
+		const onInvalidSymbol = vi.fn();
+
+		await addStockToActiveWatchlist(api, 'wl-1', 'sap..de', {
+			onAdding: () => {},
+			onAddFailed: () => {},
+			onAdded: () => {
+				throw new Error('should not be called');
+			},
+			onInvalidSymbol
+		});
+
+		expect(onInvalidSymbol).toHaveBeenCalledWith('SAP..DE');
+	});
+
 	it('reports an add failure without touching the previous active view', async () => {
 		const error = new WatchlistApiError('DUPLICATE_SYMBOL', 'already exists', 409);
 		const api = fakeApi({ addStock: vi.fn().mockRejectedValue(error) });
@@ -484,6 +531,9 @@ describe('addStockToActiveWatchlist', () => {
 			onAdding: () => {},
 			onAddFailed,
 			onAdded: () => {
+				throw new Error('should not be called');
+			},
+			onInvalidSymbol: () => {
 				throw new Error('should not be called');
 			}
 		});
