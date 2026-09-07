@@ -1,4 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type {
+	DiagnosticContext,
+	DiagnosticEventName,
+	DiagnosticLogger
+} from '../diagnostics/DiagnosticLogger';
 import { ExchangeRateProviderError } from '../exchange-rates/ExchangeRateProvider';
 import type {
 	ExchangeRateBatchResult,
@@ -98,6 +103,19 @@ class FakeExchangeRateProvider implements ExchangeRateProvider {
 			}
 		}
 		return { ratesToUsd: resolved, missing };
+	}
+}
+
+class FakeDiagnosticLogger implements DiagnosticLogger {
+	warnCalls: { event: DiagnosticEventName; context: DiagnosticContext }[] = [];
+	errorCalls: { event: DiagnosticEventName; context: DiagnosticContext }[] = [];
+
+	warn(event: DiagnosticEventName, context: DiagnosticContext): void {
+		this.warnCalls.push({ event, context });
+	}
+
+	error(event: DiagnosticEventName, context: DiagnosticContext): void {
+		this.errorCalls.push({ event, context });
 	}
 }
 
@@ -707,5 +725,214 @@ describe('WatchlistQueryService.getWatchlist — user isolation', () => {
 
 		expect(user1Result.stocks[0].targetPrice).toBe(100);
 		expect(user2Result.stocks[0].targetPrice).toBe(999);
+	});
+});
+
+describe('WatchlistQueryService.getWatchlist — diagnostics (TASK-040)', () => {
+	it('does not emit any diagnostic for a complete quote with a convertible market cap', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['AAPL'])]])
+		);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([
+				[
+					'AAPL',
+					{
+						symbol: 'AAPL',
+						name: 'Apple Inc.',
+						price: 120,
+						currency: 'USD',
+						annualDividend: 1,
+						marketCap: 2_500_000_000
+					}
+				]
+			])
+		);
+		const logger = new FakeDiagnosticLogger();
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			new FakeTargetPriceRepository(),
+			marketDataProvider,
+			new FakeExchangeRateProvider(),
+			logger
+		);
+
+		await service.getWatchlist('user-1', 'wl-1');
+
+		expect(logger.warnCalls).toEqual([]);
+		expect(logger.errorCalls).toEqual([]);
+	});
+
+	it('emits market_data_incomplete with reason provider_quote_missing when the provider has no quote at all', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['UNKNOWN'])]])
+		);
+		const logger = new FakeDiagnosticLogger();
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			new FakeTargetPriceRepository(),
+			new FakeMarketDataProvider(),
+			new FakeExchangeRateProvider(),
+			logger
+		);
+
+		await service.getWatchlist('user-1', 'wl-1');
+
+		expect(logger.warnCalls).toEqual([
+			{
+				event: 'market_data_incomplete',
+				context: { symbol: 'UNKNOWN', reason: 'provider_quote_missing' }
+			}
+		]);
+	});
+
+	it('emits market_data_incomplete with missingFields when the quote exists but marketCap is missing', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['AZO'])]])
+		);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([['AZO', { symbol: 'AZO', price: 3000, currency: 'USD' }]])
+		);
+		const logger = new FakeDiagnosticLogger();
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			new FakeTargetPriceRepository(),
+			marketDataProvider,
+			new FakeExchangeRateProvider(),
+			logger
+		);
+
+		await service.getWatchlist('user-1', 'wl-1');
+
+		expect(logger.warnCalls).toEqual([
+			{
+				event: 'market_data_incomplete',
+				context: { symbol: 'AZO', missingFields: ['marketCap'], reason: 'provider_field_missing' }
+			}
+		]);
+	});
+
+	it('emits market_data_incomplete with missingFields when the quote exists but price is missing', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['XYZ'])]])
+		);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([['XYZ', { symbol: 'XYZ', currency: 'USD', marketCap: 1_000_000_000 }]])
+		);
+		const logger = new FakeDiagnosticLogger();
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			new FakeTargetPriceRepository(),
+			marketDataProvider,
+			new FakeExchangeRateProvider(),
+			logger
+		);
+
+		await service.getWatchlist('user-1', 'wl-1');
+
+		expect(logger.warnCalls).toEqual([
+			{
+				event: 'market_data_incomplete',
+				context: { symbol: 'XYZ', missingFields: ['price'], reason: 'provider_field_missing' }
+			}
+		]);
+	});
+
+	it('emits market_cap_conversion_unavailable with reason fx_rate_missing when the FX rate for a present market cap is unavailable', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['2330.TW'])]])
+		);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([
+				['2330.TW', { symbol: '2330.TW', price: 500, currency: 'TWD', marketCap: 1_000_000_000 }]
+			])
+		);
+		const logger = new FakeDiagnosticLogger();
+		// TWD deliberately not supplied -> FakeExchangeRateProvider reports it missing.
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			new FakeTargetPriceRepository(),
+			marketDataProvider,
+			new FakeExchangeRateProvider({}),
+			logger
+		);
+
+		await service.getWatchlist('user-1', 'wl-1');
+
+		expect(logger.warnCalls).toEqual([
+			{
+				event: 'market_cap_conversion_unavailable',
+				context: {
+					symbol: '2330.TW',
+					fromCurrency: 'TWD',
+					toCurrency: 'USD',
+					reason: 'fx_rate_missing'
+				}
+			}
+		]);
+	});
+
+	it('does not emit an FX diagnostic for a USD market cap that needs no conversion', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['AAPL'])]])
+		);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([['AAPL', { symbol: 'AAPL', price: 120, currency: 'USD', marketCap: 2_500_000_000 }]])
+		);
+		const logger = new FakeDiagnosticLogger();
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			new FakeTargetPriceRepository(),
+			marketDataProvider,
+			new FakeExchangeRateProvider(),
+			logger
+		);
+
+		await service.getWatchlist('user-1', 'wl-1');
+
+		expect(logger.warnCalls).toEqual([]);
+		expect(logger.errorCalls).toEqual([]);
+	});
+
+	it('emits market_data_composition_anomaly when marketCap/currency/rate are all present but the conversion overflows to a non-finite result', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['HUGE'])]])
+		);
+		const marketDataProvider = new FakeMarketDataProvider(
+			new Map([['HUGE', { symbol: 'HUGE', currency: 'EUR', marketCap: Number.MAX_VALUE }]])
+		);
+		const logger = new FakeDiagnosticLogger();
+		// A valid, finite, positive rate that still overflows marketCap * rate to Infinity.
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			new FakeTargetPriceRepository(),
+			marketDataProvider,
+			new FakeExchangeRateProvider({ EUR: 10 }),
+			logger
+		);
+
+		const result = await service.getWatchlist('user-1', 'wl-1');
+
+		expect(result.stocks[0].marketCapBillionsUsd).toBeUndefined();
+		expect(logger.errorCalls).toEqual([
+			{
+				event: 'market_data_composition_anomaly',
+				context: { symbol: 'HUGE', reason: 'invalid_numeric_result' }
+			}
+		]);
+	});
+
+	it('emits no diagnostics for the default no-op logger (backward-compatible construction)', async () => {
+		const watchlistRepository = new FakeWatchlistRepository(
+			new Map([['user-1', watchlistDocument('wl-1', ['UNKNOWN'])]])
+		);
+		const service = new WatchlistQueryService(
+			watchlistRepository,
+			new FakeTargetPriceRepository(),
+			new FakeMarketDataProvider(),
+			new FakeExchangeRateProvider()
+		);
+
+		await expect(service.getWatchlist('user-1', 'wl-1')).resolves.toBeDefined();
 	});
 });

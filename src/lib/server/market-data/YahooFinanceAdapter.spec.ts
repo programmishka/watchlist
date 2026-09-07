@@ -1,6 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
+import type {
+	DiagnosticContext,
+	DiagnosticEventName,
+	DiagnosticLogger
+} from '../diagnostics/DiagnosticLogger';
 import { MarketDataProviderError } from './MarketDataProvider';
 import { YahooFinanceAdapter, type YahooQuoteClient } from './YahooFinanceAdapter';
+
+class FakeDiagnosticLogger implements DiagnosticLogger {
+	warnCalls: { event: DiagnosticEventName; context: DiagnosticContext }[] = [];
+	errorCalls: { event: DiagnosticEventName; context: DiagnosticContext }[] = [];
+
+	warn(event: DiagnosticEventName, context: DiagnosticContext): void {
+		this.warnCalls.push({ event, context });
+	}
+
+	error(event: DiagnosticEventName, context: DiagnosticContext): void {
+		this.errorCalls.push({ event, context });
+	}
+}
 
 function fakeClient(quote: (query: string | string[]) => Promise<unknown>): YahooQuoteClient {
 	return { quote: vi.fn(quote) } as unknown as YahooQuoteClient;
@@ -272,5 +290,83 @@ describe('YahooFinanceAdapter.getQuotes', () => {
 			expect(error).toBeInstanceOf(MarketDataProviderError);
 			expect((error as MarketDataProviderError).cause).toBe(originalError);
 		}
+	});
+});
+
+describe('YahooFinanceAdapter provider-failure diagnostics (TASK-040)', () => {
+	it('emits market_data_provider_failure on a getQuote failure, without logging on success', async () => {
+		const client = fakeClient(async () => AAPL_QUOTE);
+		const logger = new FakeDiagnosticLogger();
+		const adapter = new YahooFinanceAdapter(client, logger);
+
+		await adapter.getQuote('AAPL');
+
+		expect(logger.errorCalls).toEqual([]);
+
+		const failingClient = fakeClient(async () => {
+			throw new TypeError('network down');
+		});
+		const failingLogger = new FakeDiagnosticLogger();
+		const failingAdapter = new YahooFinanceAdapter(failingClient, failingLogger);
+
+		await expect(failingAdapter.getQuote('AAPL')).rejects.toThrow(MarketDataProviderError);
+
+		expect(failingLogger.errorCalls).toEqual([
+			{
+				event: 'market_data_provider_failure',
+				context: {
+					provider: 'yahoo-finance',
+					operation: 'getQuote',
+					symbol: 'AAPL',
+					errorCategory: 'TypeError',
+					errorMessage: 'network down'
+				}
+			}
+		]);
+	});
+
+	it('emits market_data_provider_failure on a getQuotes batch failure', async () => {
+		const client = fakeClient(async () => {
+			throw new Error('provider unavailable');
+		});
+		const logger = new FakeDiagnosticLogger();
+		const adapter = new YahooFinanceAdapter(client, logger);
+
+		await expect(adapter.getQuotes(['AAPL', 'SAP.DE'])).rejects.toThrow(MarketDataProviderError);
+
+		expect(logger.errorCalls).toEqual([
+			{
+				event: 'market_data_provider_failure',
+				context: {
+					provider: 'yahoo-finance',
+					operation: 'getQuotes',
+					errorCategory: 'Error',
+					errorMessage: 'provider unavailable'
+				}
+			}
+		]);
+	});
+
+	it('emits market_data_provider_failure on a resolveSymbol failure', async () => {
+		const client = fakeClient(async () => {
+			throw new Error('network down');
+		});
+		const logger = new FakeDiagnosticLogger();
+		const adapter = new YahooFinanceAdapter(client, logger);
+
+		await expect(adapter.resolveSymbol('AAPL')).rejects.toThrow(MarketDataProviderError);
+
+		expect(logger.errorCalls).toEqual([
+			{
+				event: 'market_data_provider_failure',
+				context: {
+					provider: 'yahoo-finance',
+					operation: 'resolveSymbol',
+					symbol: 'AAPL',
+					errorCategory: 'Error',
+					errorMessage: 'network down'
+				}
+			}
+		]);
 	});
 });

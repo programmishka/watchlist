@@ -18,5 +18,8 @@
 	],
 	"secrets": {
 		"required": ["ACCESS_TEAM_DOMAIN", "ACCESS_AUD"]
+	},
+	"observability": {
+		"enabled": true
 	}
 }

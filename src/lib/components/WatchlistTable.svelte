@@ -86,6 +86,8 @@
 		<tbody>
 			{#each stocks as stock (stock.symbol)}
 				{@const distanceState = distanceStateFor(stock.distanceToTarget)}
+				{@const savingsAmount = allocationBySymbol?.get(stock.symbol)?.savingsAmount}
+				{@const formattedSavingsAmount = formatWholeEuro(savingsAmount)}
 				<tr class="stock-row">
 					<td class="symbol">{stock.symbol}</td>
 					<td class="name">{stock.name ?? MISSING_VALUE_PLACEHOLDER}</td>
@@ -104,8 +106,11 @@
 					<td class="numeric distance-value distance-{distanceState}">
 						{formatSignedPercentage(stock.distanceToTarget)}
 					</td>
-					<td class="numeric savings-value">
-						{formatWholeEuro(allocationBySymbol?.get(stock.symbol)?.savingsAmount)}
+					<td
+						class="numeric savings-value"
+						title={savingsAmount !== undefined ? formattedSavingsAmount : undefined}
+					>
+						{formattedSavingsAmount}
 					</td>
 					<td class="actions">
 						<button

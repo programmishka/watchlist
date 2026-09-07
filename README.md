@@ -535,3 +535,57 @@ expected Cloudflare Access behavior (it avoids leaking allowlist
 membership) and does not need to be reproduced inside the application. The
 negative-allowlist check does not need to be repeated unless the Access
 policy changes.
+
+## Production Diagnostics
+
+The application logs structured **anomaly diagnostics** — never every
+successful request — for cases where an optional Watchlist value (Market
+Cap, Price, Currency, FX conversion) becomes unavailable, so a real
+production case can be traced back to its actual cause instead of just
+showing `—` in the UI. See `ARCHITECTURE.md` §33 for the full design
+(event names, structured context, sensitive-data rules). No external
+logging service is used — Cloudflare Workers captures `console.warn`/
+`console.error` output directly into **Workers Logs**, configured via
+`wrangler.jsonc`'s `observability.enabled`.
+
+### Inspecting Logs
+
+**Cloudflare Dashboard:**
+
+1. Open the Cloudflare dashboard → **Workers & Pages**.
+2. Select this Worker from the **Overview** list.
+3. Open its **Observability** tab (Workers Logs / Live Logs).
+
+**`wrangler tail` (real-time, from this project directory):**
+
+```sh
+npx wrangler tail
+```
+
+This streams live structured log events from the deployed Worker to the
+terminal as JSON; pipe through `jq` to filter, e.g.:
+
+```sh
+npx wrangler tail | jq 'select(.logs[]?.message[]? | tostring | contains("2330.TW"))'
+```
+
+### Reproducing a Reported Symbol Issue
+
+1. Open Workers Logs (Dashboard) or start `npx wrangler tail`.
+2. Load the affected Watchlist in the application (or ask the user
+   reporting the issue to do so).
+3. Search/filter the log stream for the symbol, e.g. `2330.TW`.
+4. Inspect the structured diagnostic event(s) for that symbol —
+   `market_data_incomplete`, `market_cap_conversion_unavailable`,
+   `market_data_composition_anomaly`, `market_data_provider_failure`, or
+   `fx_provider_failure` (see `ARCHITECTURE.md` §33.3) — to see exactly
+   which upstream cause (missing provider field, missing/invalid FX rate,
+   provider outage, or an application composition anomaly) produced the
+   missing value.
+
+**Retention:** on the Cloudflare Free plan, Workers Logs are retained for a
+limited window with a daily event cap (verify the current limits in the
+Cloudflare dashboard/documentation at the time you need them, since these
+are plan details Cloudflare can change independently of this repository) —
+this is sufficient for reproducing a recently reported issue but not for
+long-term log archival, which this project does not attempt.

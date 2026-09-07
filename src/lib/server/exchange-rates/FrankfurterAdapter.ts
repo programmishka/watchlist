@@ -1,10 +1,16 @@
 import {
+	describeProviderError,
+	NoopDiagnosticLogger,
+	type DiagnosticLogger
+} from '../diagnostics/DiagnosticLogger';
+import {
 	ExchangeRateProviderError,
 	type ExchangeRateBatchResult,
 	type ExchangeRateProvider
 } from './ExchangeRateProvider';
 
 const FRANKFURTER_LATEST_URL = 'https://api.frankfurter.dev/v1/latest';
+const PROVIDER_NAME = 'frankfurter';
 
 /** The minimal HTTP response shape this adapter needs, so tests can supply a fake without a full Response polyfill. */
 export interface HttpResponseLike {
@@ -42,7 +48,10 @@ function defaultFetch(url: string): Promise<HttpResponseLike> {
 }
 
 export class FrankfurterAdapter implements ExchangeRateProvider {
-	constructor(private readonly fetchImpl: HttpFetch = defaultFetch) {}
+	constructor(
+		private readonly fetchImpl: HttpFetch = defaultFetch,
+		private readonly logger: DiagnosticLogger = new NoopDiagnosticLogger()
+	) {}
 
 	async getRatesToUsd(currencies: string[]): Promise<ExchangeRateBatchResult> {
 		const requested = new Set(currencies);
@@ -64,12 +73,25 @@ export class FrankfurterAdapter implements ExchangeRateProvider {
 		try {
 			response = await this.fetchImpl(url);
 		} catch (error) {
+			this.logger.error('fx_provider_failure', {
+				provider: PROVIDER_NAME,
+				operation: 'getRatesToUsd',
+				currencies: nonUsdCurrencies,
+				...describeProviderError(error)
+			});
 			throw new ExchangeRateProviderError('Failed to reach the exchange-rate provider', {
 				cause: error
 			});
 		}
 
 		if (!response.ok) {
+			this.logger.error('fx_provider_failure', {
+				provider: PROVIDER_NAME,
+				operation: 'getRatesToUsd',
+				currencies: nonUsdCurrencies,
+				errorCategory: 'unexpected_status',
+				errorMessage: `status ${response.status}`
+			});
 			throw new ExchangeRateProviderError(
 				`Exchange-rate provider returned an unexpected status: ${response.status}`
 			);
@@ -79,12 +101,25 @@ export class FrankfurterAdapter implements ExchangeRateProvider {
 		try {
 			body = await response.json();
 		} catch (error) {
+			this.logger.error('fx_provider_failure', {
+				provider: PROVIDER_NAME,
+				operation: 'getRatesToUsd',
+				currencies: nonUsdCurrencies,
+				...describeProviderError(error)
+			});
 			throw new ExchangeRateProviderError('Exchange-rate provider returned an invalid response', {
 				cause: error
 			});
 		}
 
 		if (!isFrankfurterLatestResponse(body)) {
+			this.logger.error('fx_provider_failure', {
+				provider: PROVIDER_NAME,
+				operation: 'getRatesToUsd',
+				currencies: nonUsdCurrencies,
+				errorCategory: 'invalid_response_shape',
+				errorMessage: 'Exchange-rate provider returned an unexpected shape'
+			});
 			throw new ExchangeRateProviderError('Exchange-rate provider returned an unexpected shape');
 		}
 

@@ -1,3 +1,4 @@
+import { ConsoleDiagnosticLogger } from '../diagnostics/DiagnosticLogger';
 import { FrankfurterAdapter } from '../exchange-rates/FrankfurterAdapter';
 import type { ExchangeRateProvider } from '../exchange-rates/ExchangeRateProvider';
 import { YahooFinanceAdapter } from '../market-data/YahooFinanceAdapter';
@@ -42,10 +43,21 @@ export function createApplicationServices(platform: App.Platform | undefined): A
 		throw new PlatformUnavailableError();
 	}
 
+	// One diagnostic logger per request, shared by every provider/service that
+	// can emit an anomaly diagnostic (TASK-040) — mirrors the existing
+	// per-request instantiation of the rest of this graph.
+	const diagnosticLogger = new ConsoleDiagnosticLogger();
+
 	const watchlistRepository = new CloudflareKvWatchlistRepository(kv);
 	const targetPriceRepository = new CloudflareKvTargetPriceRepository(kv);
-	const marketDataProvider: MarketDataProvider = new YahooFinanceAdapter();
-	const exchangeRateProvider: ExchangeRateProvider = new FrankfurterAdapter();
+	const marketDataProvider: MarketDataProvider = new YahooFinanceAdapter(
+		undefined,
+		diagnosticLogger
+	);
+	const exchangeRateProvider: ExchangeRateProvider = new FrankfurterAdapter(
+		undefined,
+		diagnosticLogger
+	);
 
 	const watchlistService = new WatchlistService(watchlistRepository);
 	const targetPriceService = new TargetPriceService(targetPriceRepository);
@@ -57,7 +69,8 @@ export function createApplicationServices(platform: App.Platform | undefined): A
 		watchlistRepository,
 		targetPriceRepository,
 		marketDataProvider,
-		exchangeRateProvider
+		exchangeRateProvider,
+		diagnosticLogger
 	);
 	// Reuses the same watchlistQueryService instance above — no second
 	// WatchlistQueryService/repository/provider graph is constructed solely

@@ -7,7 +7,12 @@ import {
 	SAP_DE_STOCK,
 	UNKNOWN_STOCK
 } from './fixtures/stocks';
-import { mockWatchlistView, mockWatchlistsMetadata } from './support/watchlistRoutes';
+import {
+	mockCalculateInvestmentAllocation,
+	mockWatchlistView,
+	mockWatchlistsMetadata
+} from './support/watchlistRoutes';
+import { savingsValue } from './support/stockLocators';
 import type { WatchlistStock } from '../../src/lib/client/watchlistApi';
 
 const WATCHLIST_ID = 'wl-1';
@@ -213,5 +218,56 @@ test.describe('Watchlist table', () => {
 		await page.goto('/');
 
 		await expect(page.getByText('Total: 2 stocks')).toBeVisible();
+	});
+
+	test.describe('Savings Amount tooltip (TASK-040)', () => {
+		test('shows a large calculated Savings Amount fully in the DOM and repeats it in a native title', async ({
+			page
+		}) => {
+			await mockSingleWatchlist(page, [AAPL_STOCK]);
+			await mockCalculateInvestmentAllocation(page, WATCHLIST_ID, () => ({
+				totalSavings: 9_999_999,
+				invested: 9_999_999,
+				allocations: [{ symbol: 'AAPL', factor: 1, savingsAmount: 9_999_999 }]
+			}));
+
+			await page.goto('/');
+			await page.getByLabel('Total savings').fill('9999999');
+			await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
+
+			const cell = savingsValue(page, 'AAPL');
+			await expect(cell).toHaveText('€9,999,999');
+			await expect(cell).toHaveAttribute('title', '€9,999,999');
+		});
+
+		test('does not add a title to the missing-value placeholder before any calculation', async ({
+			page
+		}) => {
+			await mockSingleWatchlist(page, [AAPL_STOCK]);
+			await page.goto('/');
+
+			const cell = savingsValue(page, 'AAPL');
+			await expect(cell).toHaveText('—');
+			await expect(cell).not.toHaveAttribute('title');
+		});
+
+		test('shows a real calculated zero, distinct from the placeholder, with a matching title', async ({
+			page
+		}) => {
+			await mockSingleWatchlist(page, [AAPL_STOCK]);
+			await mockCalculateInvestmentAllocation(page, WATCHLIST_ID, () => ({
+				totalSavings: 0,
+				invested: 0,
+				allocations: [{ symbol: 'AAPL', factor: 0, savingsAmount: 0 }]
+			}));
+
+			await page.goto('/');
+			await page.getByLabel('Total savings').fill('0');
+			await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
+
+			const cell = savingsValue(page, 'AAPL');
+			await expect(cell).toHaveText('€0');
+			await expect(cell).toHaveAttribute('title', '€0');
+		});
 	});
 });

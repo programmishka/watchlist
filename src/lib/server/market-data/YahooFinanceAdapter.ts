@@ -1,11 +1,18 @@
 import YahooFinance from 'yahoo-finance2';
 import {
+	describeProviderError,
+	NoopDiagnosticLogger,
+	type DiagnosticLogger
+} from '../diagnostics/DiagnosticLogger';
+import {
 	MarketDataProviderError,
 	type MarketDataBatchResult,
 	type MarketDataProvider,
 	type ResolvedMarketSymbol,
 	type StockMarketData
 } from './MarketDataProvider';
+
+const PROVIDER_NAME = 'yahoo-finance';
 
 /**
  * The subset of Yahoo's quote fields this adapter maps. Kept minimal and
@@ -58,13 +65,22 @@ function mapYahooQuote(quote: YahooQuoteFields): StockMarketData {
 }
 
 export class YahooFinanceAdapter implements MarketDataProvider {
-	constructor(private readonly client: YahooQuoteClient = createDefaultClient()) {}
+	constructor(
+		private readonly client: YahooQuoteClient = createDefaultClient(),
+		private readonly logger: DiagnosticLogger = new NoopDiagnosticLogger()
+	) {}
 
 	async getQuote(symbol: string): Promise<StockMarketData | undefined> {
 		let quote: YahooQuoteFields | undefined;
 		try {
 			quote = await this.client.quote(symbol);
 		} catch (error) {
+			this.logger.error('market_data_provider_failure', {
+				provider: PROVIDER_NAME,
+				operation: 'getQuote',
+				symbol,
+				...describeProviderError(error)
+			});
 			throw new MarketDataProviderError(`Failed to retrieve market data for symbol "${symbol}"`, {
 				cause: error
 			});
@@ -78,6 +94,12 @@ export class YahooFinanceAdapter implements MarketDataProvider {
 		try {
 			quote = await this.client.quote(symbol);
 		} catch (error) {
+			this.logger.error('market_data_provider_failure', {
+				provider: PROVIDER_NAME,
+				operation: 'resolveSymbol',
+				symbol,
+				...describeProviderError(error)
+			});
 			throw new MarketDataProviderError(`Failed to resolve symbol "${symbol}"`, {
 				cause: error
 			});
@@ -99,6 +121,11 @@ export class YahooFinanceAdapter implements MarketDataProvider {
 		try {
 			quotes = await this.client.quote(symbols);
 		} catch (error) {
+			this.logger.error('market_data_provider_failure', {
+				provider: PROVIDER_NAME,
+				operation: 'getQuotes',
+				...describeProviderError(error)
+			});
 			throw new MarketDataProviderError('Failed to retrieve market data batch', {
 				cause: error
 			});

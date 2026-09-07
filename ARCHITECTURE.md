@@ -2389,7 +2389,131 @@ The spike and supporting evidence are documented in
 
 ---
 
-## 33. Architecture Summary
+## 33. Production Diagnostics (TASK-040)
+
+> Optional provider data remains fail-soft in the product UI, while
+> structured server-side anomaly diagnostics record why data became
+> unavailable.
+
+The Product Owner observed Watchlist stocks with a missing `Market Cap (USD
+bn)` in production (e.g. `2330.TW`, `ASSA-B.ST`, `AZO`) with no way to tell
+whether the cause was the market-data provider, FX conversion, or an
+application composition defect. TASK-040 adds a small, anomaly-oriented
+structured-logging boundary so this can be diagnosed from Cloudflare Workers
+Logs without changing any user-facing behavior (§16/§17.3/§30 remain
+unchanged: unavailable optional values still render as the missing-value
+placeholder, never a fabricated value).
+
+### 33.1 Logging Sink
+
+Cloudflare Workers captures `console.warn`/`console.error` output directly
+into **Workers Logs** — no external logging provider (Datadog, Sentry,
+Grafana, Logtail, ...) is introduced or required. Verified against current
+Cloudflare documentation: an explicit
+`wrangler.jsonc`
+```jsonc
+"observability": { "enabled": true }
+```
+is the authoritative way to guarantee Workers Logs capture for this Worker
+(Cloudflare states new Workers default to this, but an existing project's
+`wrangler.jsonc` predates that default and did not previously declare it), so
+this task adds the smallest possible explicit configuration rather than
+relying on an ambient default. `head_sampling_rate` is left at its default of
+`1` (100%) — this application's request volume is low enough that sampling
+would risk dropping the very diagnostic events this task exists to capture.
+
+### 33.2 Diagnostic Logging Boundary
+
+A small, dependency-free interface — `DiagnosticLogger`
+(`src/lib/server/diagnostics/DiagnosticLogger.ts`) — is the single
+abstraction every diagnostic passes through, so individual services never
+call `console.warn`/`console.error` directly and diagnostics stay
+consistent/testable:
+
+```ts
+interface DiagnosticLogger {
+  warn(event: DiagnosticEventName, context: DiagnosticContext): void;
+  error(event: DiagnosticEventName, context: DiagnosticContext): void;
+}
+```
+
+`ConsoleDiagnosticLogger` is the production implementation (delegates to
+`console.warn`/`console.error`, passed as a structured object rather than an
+interpolated string, so Workers Logs stays queryable instead of requiring
+log-string parsing); `NoopDiagnosticLogger` is the default used where a
+logger isn't explicitly supplied (existing/unrelated tests). This is
+deliberately not a general-purpose logging framework: no log levels beyond
+warn/error, no transports, no hierarchy, no runtime-configurable log level.
+
+**Anomaly-only.** Normal successful market-data, FX, and composition
+operations are never logged through this boundary — only missing/unavailable/
+anomalous conditions. `warn` is used for expected partial-data conditions
+(a field the provider simply didn't return, an FX rate that isn't available);
+`error` is used for unexpected provider/application failures (a provider
+throwing, or a composition anomaly where all upstream inputs were valid yet
+the result was still unavailable).
+
+**Wiring.** `createApplicationServices()` constructs one
+`ConsoleDiagnosticLogger` per request and passes it into
+`YahooFinanceAdapter`, `FrankfurterAdapter`, and `WatchlistQueryService` —
+the same per-request instantiation pattern already used for the rest of the
+service graph (§25).
+
+### 33.3 Diagnostic Events
+
+The smallest event set that distinguishes the causes the Product Owner
+needs to tell apart:
+
+| Event | Emitted by | Level | Meaning |
+| --- | --- | --- | --- |
+| `market_data_incomplete` | `WatchlistQueryService` | warn | The provider returned no quote for a symbol (`reason: provider_quote_missing`), or a quote missing `price`/`marketCap`/`currency` (`reason: provider_field_missing`, `missingFields: [...]`). |
+| `market_cap_conversion_unavailable` | `WatchlistQueryService` | warn | A present market cap could not be converted to USD: no FX rate for the currency (`reason: fx_rate_missing`) or an invalid rate (`reason: invalid_exchange_rate`). Never emitted for a currency that needs no conversion (USD). |
+| `market_data_composition_anomaly` | `WatchlistQueryService` | error | Market cap, currency, and FX rate were all present in some form, yet the defensive numeric check in `calculateMarketCapInBillionsUsd` still rejected the result (`reason: invalid_numeric_result`) — distinct from routine upstream-missing-data warnings. |
+| `market_data_provider_failure` | `YahooFinanceAdapter` | error | The Yahoo client itself threw (network/outage/unexpected response) for `getQuote`/`getQuotes`/`resolveSymbol`. The existing `MarketDataProviderError`/`MARKET_DATA_UNAVAILABLE` public behavior (§16, §24.3) is unchanged — this only adds a diagnostic alongside the existing throw. |
+| `fx_provider_failure` | `FrankfurterAdapter` | error | The Frankfurter adapter itself failed technically (network failure, non-OK status, invalid/unexpected response shape) — distinct from a normal per-currency missing rate, which surfaces as `missing` on an otherwise-successful `getRatesToUsd` result, not a throw. The existing `ExchangeRateProviderError`/`fx-provider-unavailable` warning behavior (§17.3) is unchanged. |
+
+`market_data_incomplete`/`market_cap_conversion_unavailable` are
+composition-level diagnostics and deliberately omit a `provider` field —
+`WatchlistQueryService` depends only on the provider-neutral
+`MarketDataProvider`/`ExchangeRateProvider` interfaces (§28) and must not
+encode which concrete adapter is wired, to avoid leaking Yahoo/Frankfurter-
+specific knowledge into composition logic. `provider` (`yahoo-finance`/
+`frankfurter`) appears only on the two adapter-level failure events, where
+the adapter legitimately knows its own identity.
+
+`market_data_incomplete`'s `missingFields`/`provider_quote_missing`
+distinction and `market_cap_conversion_unavailable` are mutually exclusive
+per stock for the same underlying cause: a missing market cap or missing
+currency is reported once via `market_data_incomplete`, not duplicated as an
+FX diagnostic.
+
+### 33.4 Sensitive-Data Rule
+
+Diagnostic context is intentionally small and bounded, and must never
+contain:
+
+* `Cf-Access-Jwt-Assertion`, `CF_Authorization`, `Authorization`, or any
+  other authentication/cookie material;
+* user email or user ID;
+* a complete Watchlist, Target Price, or Savings Amount;
+* a complete raw provider response (Yahoo or Frankfurter).
+
+Provider-failure context uses `describeProviderError()`
+(`DiagnosticLogger.ts`), which extracts only a short `errorCategory` (the
+error's `name`/constructor) and an `errorMessage` bounded to 200 characters —
+never the full error object, cause chain, or stack trace, and never an
+unbounded upstream error body. Stock symbols passed into diagnostic context
+are already bounded (§29.2, `MAX_STOCK_SYMBOL_LENGTH`).
+
+### 33.5 Operations
+
+See `README.md`'s "Production Diagnostics" section for the exact Cloudflare
+Dashboard / `wrangler tail` workflow used to inspect these events after a
+production deployment.
+
+---
+
+## 34. Architecture Summary
 
 The target architecture is deliberately small:
 

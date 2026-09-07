@@ -1,9 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
+import type {
+	DiagnosticContext,
+	DiagnosticEventName,
+	DiagnosticLogger
+} from '../diagnostics/DiagnosticLogger';
 import { ExchangeRateProviderError } from './ExchangeRateProvider';
 import { FrankfurterAdapter, type HttpFetch, type HttpResponseLike } from './FrankfurterAdapter';
 
 function jsonResponse(body: unknown, status = 200): HttpResponseLike {
 	return { ok: status >= 200 && status < 300, status, json: async () => body };
+}
+
+class FakeDiagnosticLogger implements DiagnosticLogger {
+	warnCalls: { event: DiagnosticEventName; context: DiagnosticContext }[] = [];
+	errorCalls: { event: DiagnosticEventName; context: DiagnosticContext }[] = [];
+
+	warn(event: DiagnosticEventName, context: DiagnosticContext): void {
+		this.warnCalls.push({ event, context });
+	}
+
+	error(event: DiagnosticEventName, context: DiagnosticContext): void {
+		this.errorCalls.push({ event, context });
+	}
 }
 
 describe('FrankfurterAdapter', () => {
@@ -133,5 +151,84 @@ describe('FrankfurterAdapter', () => {
 		const adapter = new FrankfurterAdapter(fetchImpl);
 
 		await expect(adapter.getRatesToUsd(['EUR'])).rejects.toThrow(ExchangeRateProviderError);
+	});
+});
+
+describe('FrankfurterAdapter provider-failure diagnostics (TASK-040)', () => {
+	it('does not emit a diagnostic on a successful lookup', async () => {
+		const fetchImpl = vi.fn<HttpFetch>(async () =>
+			jsonResponse({ amount: 1, base: 'USD', date: '2026-09-02', rates: { EUR: 0.86 } })
+		);
+		const logger = new FakeDiagnosticLogger();
+		const adapter = new FrankfurterAdapter(fetchImpl, logger);
+
+		await adapter.getRatesToUsd(['EUR']);
+
+		expect(logger.errorCalls).toEqual([]);
+	});
+
+	it('emits fx_provider_failure when the network request fails', async () => {
+		const fetchImpl = vi.fn<HttpFetch>(async () => {
+			throw new TypeError('network down');
+		});
+		const logger = new FakeDiagnosticLogger();
+		const adapter = new FrankfurterAdapter(fetchImpl, logger);
+
+		await expect(adapter.getRatesToUsd(['EUR'])).rejects.toThrow(ExchangeRateProviderError);
+
+		expect(logger.errorCalls).toEqual([
+			{
+				event: 'fx_provider_failure',
+				context: {
+					provider: 'frankfurter',
+					operation: 'getRatesToUsd',
+					currencies: ['EUR'],
+					errorCategory: 'TypeError',
+					errorMessage: 'network down'
+				}
+			}
+		]);
+	});
+
+	it('emits fx_provider_failure for a non-OK HTTP status', async () => {
+		const fetchImpl = vi.fn<HttpFetch>(async () => jsonResponse({ message: 'error' }, 503));
+		const logger = new FakeDiagnosticLogger();
+		const adapter = new FrankfurterAdapter(fetchImpl, logger);
+
+		await expect(adapter.getRatesToUsd(['EUR'])).rejects.toThrow(ExchangeRateProviderError);
+
+		expect(logger.errorCalls).toEqual([
+			{
+				event: 'fx_provider_failure',
+				context: {
+					provider: 'frankfurter',
+					operation: 'getRatesToUsd',
+					currencies: ['EUR'],
+					errorCategory: 'unexpected_status',
+					errorMessage: 'status 503'
+				}
+			}
+		]);
+	});
+
+	it('emits fx_provider_failure for an unexpected response shape', async () => {
+		const fetchImpl = vi.fn<HttpFetch>(async () => jsonResponse({ unexpected: true }));
+		const logger = new FakeDiagnosticLogger();
+		const adapter = new FrankfurterAdapter(fetchImpl, logger);
+
+		await expect(adapter.getRatesToUsd(['EUR'])).rejects.toThrow(ExchangeRateProviderError);
+
+		expect(logger.errorCalls).toEqual([
+			{
+				event: 'fx_provider_failure',
+				context: {
+					provider: 'frankfurter',
+					operation: 'getRatesToUsd',
+					currencies: ['EUR'],
+					errorCategory: 'invalid_response_shape',
+					errorMessage: 'Exchange-rate provider returned an unexpected shape'
+				}
+			}
+		]);
 	});
 });
