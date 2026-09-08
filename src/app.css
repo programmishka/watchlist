@@ -177,3 +177,18 @@ body {
 	font-size: 0.95rem;
 	line-height: 1;
 }
+
+/* Shared workspace-toolbar group layout (TASK-034 §21-23, relocated here by
+   TASK-042 so StockAddForm/InvestmentAllocationControls and the page's inline
+   company-name filter group can all use it across component boundaries). */
+.toolbar-group {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4rem;
+	/* Without this, a flex item's default `min-width: auto` refuses to
+	   shrink below its content's unwrapped width, which would force page
+	   overflow at narrow viewports instead of letting the group's own
+	   flex-wrap reflow its children onto separate lines (TASK-034 §37-38). */
+	min-width: 0;
+}

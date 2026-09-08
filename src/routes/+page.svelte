@@ -4,6 +4,8 @@
 	import WatchlistTabs from '$lib/components/WatchlistTabs.svelte';
 	import WatchlistTable from '$lib/components/WatchlistTable.svelte';
 	import WatchlistCards from '$lib/components/WatchlistCards.svelte';
+	import StockAddForm from '$lib/components/StockAddForm.svelte';
+	import InvestmentAllocationControls from '$lib/components/InvestmentAllocationControls.svelte';
 	import {
 		STOCK_CARD_PRESENTATION_BREAKPOINT_PX,
 		stockPresentationModeForWidth
@@ -33,8 +35,6 @@
 		formatStockCount
 	} from '$lib/client/watchlistFilter';
 	import { MAX_WATCHLIST_NAME_LENGTH } from '$lib/shared/watchlistName';
-	import { MAX_STOCK_SYMBOL_LENGTH } from '$lib/shared/stockSymbol';
-	import { TOTAL_SAVINGS_INPUT_MAX_LENGTH } from '$lib/shared/investmentSavings';
 	import {
 		DEFAULT_WATCHLIST_SORT,
 		sortWatchlistStocks,
@@ -44,7 +44,6 @@
 	} from '$lib/client/watchlistSort';
 	import { allocationBySymbol as buildAllocationBySymbol } from '$lib/client/investmentAllocation';
 	import { parseTotalSavingsInput } from '$lib/client/investmentSavingsInput';
-	import { formatWholeEuro } from '$lib/client/format';
 	import type { TargetPriceSaveResult } from '$lib/components/TargetPriceCell.svelte';
 
 	type MetadataStatus = 'loading' | 'loaded' | 'error';
@@ -143,7 +142,6 @@
 			allocationBusy
 	);
 	let createDisabled = $derived(newWatchlistName.trim().length === 0 || managementBusy);
-	let addStockDisabled = $derived(newStockSymbol.trim().length === 0 || managementBusy);
 	let activeWatchlistName = $derived(
 		watchlists.find((watchlist) => watchlist.id === activeWatchlistId)?.name
 	);
@@ -316,19 +314,12 @@
 		});
 	}
 
-	function handleStockSymbolInput(event: Event) {
-		// Immediate uppercase UX (TASK-029 §24-25): only case is transformed
-		// while typing; trimming/full syntax validation happens on submit.
-		newStockSymbol = (event.currentTarget as HTMLInputElement).value.toUpperCase();
-	}
-
-	function handleAddStockSubmit(event: SubmitEvent) {
-		event.preventDefault();
-		if (!activeWatchlistId || addStockDisabled) {
+	function handleAddStockSubmit(symbol: string) {
+		if (!activeWatchlistId || managementBusy) {
 			return;
 		}
 
-		addStockToActiveWatchlist(defaultWatchlistShellApi, activeWatchlistId, newStockSymbol, {
+		addStockToActiveWatchlist(defaultWatchlistShellApi, activeWatchlistId, symbol, {
 			onInvalidSymbol: (normalizedSymbol) => {
 				newStockSymbol = normalizedSymbol;
 				stockMutationError = undefined;
@@ -408,13 +399,12 @@
 		});
 	}
 
-	function handleCalculateAllocation(event: SubmitEvent) {
-		event.preventDefault();
+	function handleCalculateAllocation(rawTotalSavingsInput: string) {
 		if (!activeWatchlistId || managementBusy) {
 			return;
 		}
 
-		const totalSavings = parseTotalSavingsInput(totalSavingsInput);
+		const totalSavings = parseTotalSavingsInput(rawTotalSavingsInput);
 		if (totalSavings === undefined) {
 			allocationInputError = 'Enter a whole number of Euros, 0 or greater.';
 			return;
@@ -532,29 +522,13 @@
 					lone stock-add control remains available to add the first stock.
 				-->
 				<div class="workspace-toolbar">
-					<form class="toolbar-group stock-group" onsubmit={handleAddStockSubmit}>
-						<label class="sr-only" for="new-stock-symbol">Stock symbol</label>
-						<input
-							id="new-stock-symbol"
-							class="field-input stock-symbol-input"
-							type="text"
-							placeholder="Stock symbol"
-							maxlength={MAX_STOCK_SYMBOL_LENGTH}
-							value={newStockSymbol}
-							oninput={handleStockSymbolInput}
-							disabled={managementBusy}
-							autocomplete="off"
-						/>
-						<button
-							type="submit"
-							class="btn btn-primary"
-							aria-label="Add stock"
-							aria-busy={stockMutationBusy}
-							disabled={addStockDisabled}
-						>
-							+
-						</button>
-					</form>
+					<StockAddForm
+						value={newStockSymbol}
+						disabled={managementBusy}
+						busy={stockMutationBusy}
+						onInput={(value) => (newStockSymbol = value)}
+						onAdd={handleAddStockSubmit}
+					/>
 
 					{#if activeViewStatus === 'loaded' && activeView && activeView.stocks.length > 0}
 						<div class="toolbar-group filter-group">
@@ -570,38 +544,16 @@
 							/>
 						</div>
 
-						<form class="toolbar-group allocation-group" onsubmit={handleCalculateAllocation}>
-							<label class="sr-only" for="total-savings">Total savings</label>
-							<input
-								id="total-savings"
-								class="field-input allocation-input"
-								type="text"
-								inputmode="numeric"
-								placeholder="Total savings"
-								maxlength={TOTAL_SAVINGS_INPUT_MAX_LENGTH}
-								bind:value={totalSavingsInput}
-								aria-invalid={allocationInputError !== undefined}
-								aria-describedby={allocationInputError || allocationError
-									? 'allocation-feedback'
-									: undefined}
-								disabled={managementBusy}
-								autocomplete="off"
-							/>
-							<button
-								type="submit"
-								class="btn btn-primary"
-								aria-label="Calculate investment allocation"
-								aria-busy={allocationBusy}
-								disabled={managementBusy}
-							>
-								Calculate
-							</button>
-							{#if investmentAllocation}
-								<span class="allocation-result"
-									>Allocated savings: {formatWholeEuro(investmentAllocation.invested)}</span
-								>
-							{/if}
-						</form>
+						<InvestmentAllocationControls
+							value={totalSavingsInput}
+							disabled={managementBusy}
+							busy={allocationBusy}
+							inputInvalid={allocationInputError !== undefined}
+							hasFeedback={allocationInputError !== undefined || allocationError !== undefined}
+							result={investmentAllocation}
+							onInput={(value) => (totalSavingsInput = value)}
+							onCalculate={handleCalculateAllocation}
+						/>
 					{/if}
 				</div>
 
@@ -733,26 +685,10 @@
 		margin-bottom: 0.4rem;
 	}
 
-	.toolbar-group {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: 0.4rem;
-		/* Without this, a flex item's default `min-width: auto` refuses to
-		   shrink below its content's unwrapped width, which would force page
-		   overflow at narrow viewports instead of letting the group's own
-		   flex-wrap reflow its children onto separate lines (TASK-034 §37-38). */
-		min-width: 0;
-	}
-
-	.stock-group {
-		flex: 0 1 auto;
-	}
-
-	.stock-symbol-input {
-		width: 11rem;
-	}
-
+	/* `.toolbar-group` itself is shared, global vocabulary (moved to
+	   `app.css` by TASK-042) so StockAddForm/InvestmentAllocationControls can
+	   use it across their own component boundary; only the inline
+	   company-name filter group's own sizing stays page-level here. */
 	.filter-group {
 		flex: 1 1 17.5rem;
 	}
@@ -761,21 +697,6 @@
 		width: 100%;
 		min-width: 17.5rem;
 		max-width: 25rem;
-	}
-
-	.allocation-group {
-		flex: 0 1 auto;
-		margin-left: auto;
-	}
-
-	.allocation-input {
-		width: 7rem;
-		text-align: right;
-	}
-
-	.allocation-result {
-		font-weight: 600;
-		color: var(--color-text);
 	}
 
 	.count {

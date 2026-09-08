@@ -1102,3 +1102,40 @@ rewriting any of the accepted TASK-016–036 architecture it describes.
 6. Sequence the work as TASK-042 (StockAddForm/InvestmentAllocationControls) → TASK-043
    (StockPresentation/presentationMode) → TASK-044 (Workspace) → optional TASK-045 (naming),
    each independently green.
+
+---
+
+## 28. TASK-042 Implementation Status
+
+TASK-042 implemented the first phase of §23's plan: `src/lib/components/StockAddForm.svelte` and
+`src/lib/components/InvestmentAllocationControls.svelte` now exist, each a small, controlled,
+callback-prop component (`value`/`disabled`/`busy` in, `onInput`/`onAdd` or `onCalculate` out —
+`InvestmentAllocationControls` additionally receives `inputInvalid`/`hasFeedback`/`result` for
+its own field validity and result display) with no import of `watchlistShell.ts` or
+`watchlistApi.ts`. `+page.svelte` still owns every underlying `$state` for both workflows
+(`newStockSymbol`, `stockMutationBusy`, `stockMutationError`, `stockSymbolValidationError`,
+`totalSavingsInput`, `allocationInputError`, `investmentAllocation`, `allocationBusy`,
+`allocationError`) exactly as §20 recommends for the pre-Workspace state (form-draft text stays
+page-owned rather than moving into either component, since no Workspace exists yet in TASK-042 to
+own it instead) — no behavior, prop, or state-ownership deviation from this audit's plan.
+
+One implementation refinement beyond what §23 specified: TASK-042 renders the stock-add and
+allocation status/error `<p>` elements at page level (unchanged DOM position, directly below
+`.workspace-toolbar`) rather than inside either new component. The task specification explicitly
+allows this (errors "may," not "must," be rendered by the component) and it was the more
+conservative choice, since these forms sit inside a shared `display:flex; flex-wrap:wrap` toolbar
+row (`.workspace-toolbar`/`.toolbar-group`) — rendering an error paragraph as a flex child of the
+new component's own `<form>` would visually confine it to that form's flex-basis width instead of
+spanning the full row as today, a visible layout regression the task explicitly prohibits (§39,
+§45–46). `InvestmentAllocationControls`' `aria-describedby="allocation-feedback"` still correctly
+targets the page-rendered paragraph by plain DOM id across the component boundary.
+
+`.toolbar-group`'s generic flex-row layout (previously page-scoped CSS) moved to the shared,
+unscoped `app.css` vocabulary (alongside `.btn`/`.field-input`/`.status`) since it is now used by
+three siblings across two separate component boundaries (`StockAddForm`, the still-inline
+company-name filter group, `InvestmentAllocationControls`); each component's own item-sizing rules
+(`.stock-group`/`.stock-symbol-input`, `.allocation-group`/`.allocation-input`/`.allocation-result`)
+moved into that component's own scoped `<style>` block, per §47.
+
+`StockPresentation`/`presentationMode` (TASK-043) and `watchlistWorkspace.svelte.ts` (TASK-044)
+remain unimplemented, as intended — TASK-042 does not proceed to either.

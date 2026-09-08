@@ -1878,3 +1878,14 @@ When finished, report:
 Do not proceed with TASK-042.
 
 Do not stage, commit, or push changes. Git operations are performed manually by the user.
+
+---
+
+## Follow-Up: TASK-042
+
+TASK-042 implemented the first phase of this audit's recommended incremental refactoring plan
+(§23 of `docs/architecture/frontend-architecture-audit.md`): extraction of `StockAddForm.svelte`
+and `InvestmentAllocationControls.svelte`, with page-level state ownership and the
+`watchlistShell`/`watchlistApi`/pure-helper layers left unchanged, exactly as recommended. See
+`docs/architecture/frontend-architecture-audit.md` §28 for the concrete implementation-status
+note. This task's own status remains `Done`; no finding above was revised.

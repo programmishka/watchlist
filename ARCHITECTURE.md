@@ -2074,6 +2074,24 @@ architecture described in this section. See
 `docs/architecture/frontend-architecture-audit.md` for the full analysis,
 component/state inventories, and the proposed TASK-042+ sequence.
 
+### 26.15 StockAddForm / InvestmentAllocationControls Extraction (TASK-042)
+
+TASK-042 implemented the first phase of TASK-041's plan: `StockAddForm.svelte`
+and `InvestmentAllocationControls.svelte` (`src/lib/components/`) now render
+the stock-add and investment-allocation form markup previously inline in
+`+page.svelte`. Both are small controlled components — a `value`/`disabled`/
+`busy` prop plus an intent callback (`onAdd(symbol)` /
+`onCalculate(totalSavingsInput)`) — with no owned business state and no
+import of `watchlistShell.ts`/`watchlistApi.ts`. All underlying `$state`
+(`newStockSymbol`, `stockMutationBusy`/`Error`, `stockSymbolValidationError`,
+`totalSavingsInput`, `allocationInputError`, `investmentAllocation`,
+`allocationBusy`/`Error`) remains owned by `+page.svelte` exactly as before,
+including every reset/invalidation rule in this section; only the markup
+boundary changed. The company-name filter (§26.5) remains inline in
+`+page.svelte`, unextracted, per TASK-041's own recommendation. See
+`docs/architecture/frontend-architecture-audit.md` §28 for the concrete
+implementation-status note.
+
 ---
 
 ## 27. Testing Strategy
