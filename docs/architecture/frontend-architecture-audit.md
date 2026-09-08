@@ -1187,3 +1187,62 @@ unmodified except for two new strict-mode "exactly one Target Price input / exac
 button" assertions added to the two cross-presentation state-preservation tests (§61 of the task),
 which would fail if `StockPresentation` ever mounted both `WatchlistTable` and `WatchlistCards`
 simultaneously.
+
+## 30. TASK-044 Implementation Status
+
+TASK-044 implemented the third phase of §23's plan (Option B, §18.2): `WatchlistWorkspace`
+(`src/lib/client/watchlistWorkspace.svelte.ts`) now exists as a Svelte 5 rune-based class, and
+`+page.svelte` creates exactly one instance (`new WatchlistWorkspace()`) inside its own
+component-scoped `<script>`, never as a module-level export — satisfying the SSR/per-instance
+requirement this audit's §13/§23/§26 flagged as the phase's primary risk.
+
+**State migrated as predicted (§11.2/§20/§21).** Every field this audit classified as
+server-derived, workspace, transient-server-result, form-draft-with-cross-cutting-lifecycle, or
+operation/error state (§3.1, §11.2) moved into `WatchlistWorkspace` unchanged in name and semantics:
+`watchlists`, `activeWatchlistId`, `metadataStatus`/`metadataError`, `activeView`,
+`activeViewStatus`/`activeViewError`, `tabSwitchError`, `newWatchlistName`, `createStatus`/
+`createError`, `deleteStatus`/`deleteError`, `newStockSymbol`, `stockMutationBusy`/
+`stockMutationError`, `stockSymbolValidationError`, `targetPriceMutationBusy`,
+`companyNameFilter`, `sort`, `totalSavingsInput`, `allocationInputError`, `investmentAllocation`,
+`allocationBusy`/`allocationError`. `presentationMode` (already relocated to `StockPresentation` by
+TASK-043) and every component-local state inventoried in §3.5/§20 (`TargetPriceCell` draft,
+`WatchlistTabs` capacity/disclosure) stayed exactly where TASK-041/043 placed them — confirming
+§11.3's predictions.
+
+**Derived state (§4).** `managementBusy`, `createDisabled`, `activeWatchlistName`, `isFiltered`,
+`filteredStocks`, `visibleStocks`, `totalStockCount`, `stockCountText`, and `allocationBySymbol` are
+now `$derived` Workspace fields computed from the same pure helpers (`watchlistFilter.ts`,
+`watchlistSort.ts`, `investmentAllocation.ts`) `+page.svelte` used directly before — no formula
+changed, only where the `$derived` wiring lives, exactly as §4.1 anticipated.
+
+**Mutation-lifecycle duplication (Finding #1, §15).** The nine near-identical handler shapes are now
+nine Workspace methods (`load`, `selectWatchlist`, `createWatchlist`, `deleteWatchlist`, `addStock`,
+`removeStock`, `saveTargetPrice`, `calculateAllocation`, plus the pure `changeSort`). Two small
+private helpers were introduced, both within this audit's §73/TASK-044's own "small internal
+lifecycle helper" allowance: `activeWatchlistLoadHandlers()` (the identical
+loading/loaded/error triple shared by `load`/`selectWatchlist`/`createWatchlist`/`deleteWatchlist`)
+and `applyActiveWatchlistTransitionReset()` (the coupled filter/sort/allocation reset from §6,
+previously duplicated three times). No generic `runMutation({...})` dispatcher was introduced — each
+workflow remains its own named, readable method, per the task's explicit rejection of that shape.
+
+**Workspace vs. `watchlistShell` distinction (§7.2/§11.4) — confirmed intact.** Every Workspace
+workflow method calls exactly one `watchlistShell` function and applies its result to Workspace
+state; no method re-sequences `watchlistApi` calls itself, and `watchlistShell.ts`/`watchlistApi.ts`
+are unmodified by TASK-044.
+
+**Testability gap closed (§14.2-§14.3) — the audit's single largest predicted benefit.**
+`src/lib/client/watchlistWorkspace.spec.ts` (34 tests) directly unit-tests every rule this audit
+identified as E2E-only: initial load and load failure; selection/create/delete success and failure,
+including the exact filter/sort/allocation reset-on-success and preservation-on-failure behavior;
+stock add/remove success/failure and allocation invalidation/preservation; Target Price success,
+`MARKET_DATA_UNAVAILABLE` partial success, and failure; allocation success, an explicit zero result,
+and failure; filter/sort causing no API call and not touching allocation; derived counts; and
+`managementBusy` aggregation/serialization (including a same-tick "second call while the first is
+in flight" test for both `selectWatchlist` and `calculateAllocation`) — all against a fake
+`WatchlistShellApi`, with no DOM, no `matchMedia`, and no `window.confirm`. The full existing
+Playwright suite (§14.4/§22) was re-run unmodified and remains green; no E2E test was removed,
+weakened, or replaced.
+
+**Deviations from this audit: none identified.** The implementation matches §11.2/§11.3/§18.2/§23's
+TASK-044 plan field-for-field; no state this audit recommended keeping local was centralized, and no
+state this audit recommended centralizing was left page-local.

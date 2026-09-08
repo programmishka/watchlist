@@ -1317,3 +1317,15 @@ When finished, report:
 Do not proceed to TASK-044.
 
 Do not stage, commit, or push changes. Git operations are performed manually by the user.
+
+---
+
+## Follow-Up: TASK-044
+
+TASK-044 introduced the rune-based `WatchlistWorkspace` and moved the remaining coupled page state
+(server-derived state, filter, sort, allocation, operation/error state, and the mutation workflows)
+into it. `StockPresentation.svelte` itself was not modified: `presentationMode`, its SSR guard, and
+its `matchMedia` breakpoint listener remain exactly as this task placed them, and `+page.svelte`
+still supplies the same `stocks`/`sort`/`busy`/`allocationBySymbol`/`onSort`/`onRemove`/
+`onSaveTargetPrice` props — now sourced from the Workspace instead of page-level `$state`/handlers.
+This task's own status remains `Done`; no requirement above was revised.

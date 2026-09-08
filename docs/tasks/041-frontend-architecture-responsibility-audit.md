@@ -1900,3 +1900,21 @@ between `watchlistPresentation.ts` and the new `StockPresentation.svelte` (§9/�
 still low-severity and, per the task's own instruction, left unrenamed, deferred to optional
 TASK-045. See `docs/architecture/frontend-architecture-audit.md` §29 for the concrete
 implementation-status note. This task's own status remains `Done`; no finding above was revised.
+
+## Follow-Up: TASK-044
+
+TASK-044 implemented the third and final required phase of this audit's recommended incremental
+refactoring plan (§23 of `docs/architecture/frontend-architecture-audit.md`, Option B per §18.2):
+introduction of the rune-based `WatchlistWorkspace` (`src/lib/client/watchlistWorkspace.svelte.ts`),
+factory/class-instantiated once per page instance from inside `+page.svelte`'s own `<script>`, never
+as a module-level singleton, exactly as this audit's §13/§23 SSR requirement specified. Every state
+field, derived value, and mutation workflow this audit's §11.2/§20/§21 recommended moving into the
+Workspace moved unchanged in name and semantics; every state this audit recommended keeping
+component-local (`TargetPriceCell` draft state, `WatchlistTabs` capacity/disclosure,
+`presentationMode`) remained exactly where TASK-041/TASK-043 placed it. `watchlistShell.ts` and
+`watchlistApi.ts` are unmodified. This audit's single largest predicted benefit — direct unit-test
+coverage of the reset/invalidation rules in §6, previously exercisable only through Playwright — was
+realized in `src/lib/client/watchlistWorkspace.spec.ts` (34 tests) without removing or weakening any
+existing Playwright coverage. See `docs/architecture/frontend-architecture-audit.md` §30 for the
+concrete implementation-status note. This task's own status remains `Done`; no finding above was
+revised. Optional TASK-045 (naming follow-up) remains unimplemented and undecided, as intended.

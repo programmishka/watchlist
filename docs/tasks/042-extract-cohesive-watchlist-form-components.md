@@ -1389,3 +1389,16 @@ When finished, report:
 Do not proceed to TASK-043.
 
 Do not stage, commit, or push changes. Git operations are performed manually by the user.
+
+---
+
+## Follow-Up: TASK-044
+
+TASK-044 introduced the rune-based `WatchlistWorkspace` and moved the underlying `$state` this task
+deliberately left in `+page.svelte` (`newStockSymbol`, `stockMutationBusy`/`Error`,
+`stockSymbolValidationError`, `totalSavingsInput`, `allocationInputError`, `investmentAllocation`,
+`allocationBusy`/`Error`) into it. `StockAddForm.svelte` and `InvestmentAllocationControls.svelte`
+themselves were not modified: their controlled `value`/`disabled`/`busy` props and `onAdd`/
+`onCalculate` callback contracts are unchanged, now simply wired to Workspace fields/methods instead
+of page-level `$state`/handlers. This task's own status remains `Done`; no requirement above was
+revised.

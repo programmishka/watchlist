@@ -2123,6 +2123,97 @@ workflows, and `managementBusy` all remain owned by `+page.svelte` exactly as be
 composition changed. See `docs/architecture/frontend-architecture-audit.md` §29 for the concrete
 implementation-status note.
 
+### 26.17 `WatchlistWorkspace` (TASK-044)
+
+TASK-044 implemented the third, central phase of TASK-041's plan: it extracted the remaining
+coupled reactive state, operation/error state, derived state, and mutation-workflow lifecycle that
+TASK-042/TASK-043 deliberately left in `+page.svelte` into a dedicated Svelte 5 rune-based
+abstraction, `WatchlistWorkspace` (`src/lib/client/watchlistWorkspace.svelte.ts`). This establishes
+the frontend's final responsibility layering:
+
+```text
++page.svelte
+  -> composition: creates the Workspace instance, triggers the initial load, composes
+     WatchlistTabs/StockAddForm/InvestmentAllocationControls/StockPresentation, and handles the
+     one remaining genuinely UI-only interaction (the delete-confirmation dialog, §26.2)
+
+WatchlistWorkspace (.svelte.ts, per-page-instance)
+  -> reactive page state (server-derived + workspace UI + operation/error state) and workflow
+     lifecycle: applies each watchlistShell operation's result to that state, including every
+     reset/invalidation rule in §26.5-§26.13
+
+watchlistShell.ts
+  -> unchanged: stateless async orchestration around watchlistApi (§26.1)
+
+watchlistApi.ts
+  -> unchanged: HTTP transport (§26.1)
+
+pure client helpers (watchlistFilter.ts, watchlistSort.ts, investmentAllocation.ts,
+investmentSavingsInput.ts, targetPriceInput.ts, format.ts, distancePresentation.ts, ...)
+  -> unchanged: deterministic calculations/transforms, composed by the Workspace exactly as
+     +page.svelte previously composed them
+
+presentation components (WatchlistTabs, StockPresentation, StockAddForm,
+InvestmentAllocationControls, WatchlistTable/WatchlistCards, TargetPriceCell)
+  -> unchanged prop/callback contracts; none of them import the Workspace directly, preserving
+     +page.svelte as the sole composition boundary (§26.15/§26.16)
+```
+
+**SSR / per-instance rule.** `WatchlistWorkspace` is instantiated with `new WatchlistWorkspace()`
+directly inside `+page.svelte`'s component-scoped `<script>` and MUST NEVER be exported as an
+already-constructed module-level singleton (`export const workspace = $state(...)` or equivalent).
+Every rendered page instance — including separate SSR requests and separate concurrent client
+instances — owns its own Workspace object with its own signals; no reactive state can leak between
+them. This is a hard architectural invariant, not merely an implementation detail.
+
+**State ownership.** `WatchlistWorkspace` owns, as Svelte 5 `$state`/`$derived` class fields:
+
+* server-derived client state — `watchlists`, `activeWatchlistId`, `metadataStatus`/`Error`,
+  `activeView`, `activeViewStatus`/`Error`, `tabSwitchError` (§26.1);
+* workspace UI state — `companyNameFilter` (§26.5), `sort` (§26.6);
+* the transient allocation result — `investmentAllocation` (§26.7);
+* form-draft state whose lifecycle is coupled to workflow success/failure —
+  `newWatchlistName` (§26.2), `newStockSymbol` (§26.3), `totalSavingsInput` (§26.7);
+* one operation-status/error pair per workflow — create/delete/stock-mutation/
+  target-price-mutation/allocation, plus the local `stockSymbolValidationError`/
+  `allocationInputError` UX-validation fields (§26.2-§26.4, §26.7);
+* derived values — `managementBusy`, `createDisabled`, `activeWatchlistName`, `isFiltered`,
+  `filteredStocks`, `visibleStocks`, `totalStockCount`, `stockCountText`, `allocationBySymbol` —
+  composed from the pure helpers above, never recomputed with new logic.
+
+**Explicitly not moved**, matching TASK-041/TASK-043's own component-locality findings: Target Price
+per-row draft/save/error/warning state (`TargetPriceCell`, §26.4), `WatchlistTabs`' responsive
+`capacity`/disclosure state (§26.12), and `presentationMode`/the Table-vs-Cards breakpoint switch
+(`StockPresentation`, §26.16) all remain component-owned. The Workspace has no opinion about any of
+these.
+
+**Centralized active-Watchlist transition.** The coupled reset rule already described in
+§26.5-§26.7 (filter reset, sort reset to Name ascending, allocation invalidation, applied only on a
+*successful* transition) is implemented once, as a private `applyActiveWatchlistTransitionReset()`
+method, and invoked from the success paths of `selectWatchlist`/`createWatchlist`/`deleteWatchlist`
+— removing the previous three independent copies of this rule without changing its semantics.
+
+**Workflow methods.** `load()`, `selectWatchlist(id)`, `createWatchlist()`, `deleteWatchlist()`,
+`addStock(symbol)`, `removeStock(symbol)`, `saveTargetPrice(symbol, targetPrice)`,
+`calculateAllocation(rawTotalSavingsInput)`, and `changeSort(column)` are public methods (arrow
+class fields, so they can be passed directly as callback props without page-level wrapper
+functions) that each call the corresponding unchanged `watchlistShell` function and apply its
+result to the Workspace's own state — never calling `fetch`/`watchlistApi` directly, and never
+reimplementing `watchlistShell`'s sequencing. Every existing busy-guard (e.g. "no second selection
+while one is in flight") is preserved inside the relevant method, so `managementBusy`'s serialization
+guarantee (§26.2-§26.7) is unchanged.
+
+**Testability.** Because `WatchlistWorkspace` accepts its `WatchlistShellApi` dependency through its
+constructor (defaulting to `defaultWatchlistShellApi` in production), the reset/invalidation/
+transition rules in §26.5-§26.7 that were previously exercised only through Playwright are now also
+directly unit-tested (`src/lib/client/watchlistWorkspace.spec.ts`) against a fake
+`WatchlistShellApi`, following the same pattern as `watchlistShell.spec.ts` — no DOM, no
+`matchMedia`, no `window.confirm`, and no browser required. The existing Playwright suite is
+unchanged and remains the layer responsible for real DOM/ARIA/browser-event verification (§27).
+
+See `docs/architecture/frontend-architecture-audit.md` §30 for the concrete implementation-status
+note.
+
 ---
 
 ## 27. Testing Strategy
