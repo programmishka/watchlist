@@ -421,6 +421,12 @@ test.describe('Stock Cards: cross-presentation state preservation', () => {
 		await expect(page.getByLabel('Filter by company name')).toHaveValue('Workshop');
 		await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(1);
 		await expect(page.getByText('Allocated savings: €900')).toBeVisible();
+
+		// Mutually exclusive rendering (TASK-036 §59, relocated by TASK-043):
+		// these strict-mode locators would fail if Table and Cards were ever
+		// simultaneously mounted for the same stock after a presentation switch.
+		await expect(page.getByLabel('Target price for GAW.L')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Remove GAW.L' })).toBeVisible();
 	});
 
 	test('Table→Card: a non-default sort selected via the Table header survives resizing below the breakpoint', async ({
@@ -443,6 +449,12 @@ test.describe('Stock Cards: cross-presentation state preservation', () => {
 		await expect(sortColumnSelect(page)).toHaveValue('price');
 		await expect(sortDirectionButton(page)).toHaveAccessibleName('Sort direction: descending');
 		expect(await symbolTexts(page)).toEqual(['GAW.L', 'AAPL', 'SAP.DE', 'UNKNOWN']);
+
+		// Mutually exclusive rendering (TASK-036 §59, relocated by TASK-043):
+		// these strict-mode locators would fail if Table and Cards were ever
+		// simultaneously mounted for the same stock after a presentation switch.
+		await expect(page.getByLabel('Target price for SAP.DE')).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Remove SAP.DE' })).toBeVisible();
 	});
 
 	test('resizing across the breakpoint causes no application API request', async ({ page }) => {

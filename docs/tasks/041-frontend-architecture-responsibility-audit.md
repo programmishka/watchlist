@@ -1889,3 +1889,14 @@ and `InvestmentAllocationControls.svelte`, with page-level state ownership and t
 `watchlistShell`/`watchlistApi`/pure-helper layers left unchanged, exactly as recommended. See
 `docs/architecture/frontend-architecture-audit.md` §28 for the concrete implementation-status
 note. This task's own status remains `Done`; no finding above was revised.
+
+## Follow-Up: TASK-043
+
+TASK-043 implemented the second phase of this audit's recommended incremental refactoring plan
+(§23 of `docs/architecture/frontend-architecture-audit.md`): extraction of
+`StockPresentation.svelte`, absorbing `presentationMode` and the breakpoint `matchMedia` listener
+from `+page.svelte`, exactly as recommended. The naming-collision concern this audit raised
+between `watchlistPresentation.ts` and the new `StockPresentation.svelte` (§9/§19) was confirmed
+still low-severity and, per the task's own instruction, left unrenamed, deferred to optional
+TASK-045. See `docs/architecture/frontend-architecture-audit.md` §29 for the concrete
+implementation-status note. This task's own status remains `Done`; no finding above was revised.

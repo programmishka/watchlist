@@ -1085,6 +1085,11 @@ never more than two), preserving the supplied order (`{#each stocks as stock
 horizontal-scroll container (§14.2) is retained for wide-desktop exceptional
 content; it is irrelevant to Card mode, which never renders it.
 
+**Ownership note (TASK-043).** The `+page.svelte`-owned mechanics described above (`presentationMode`,
+the SSR guard, the `matchMedia` listener, the mutually exclusive `{#if}`) later moved verbatim into
+a dedicated `StockPresentation.svelte` component; the 1120px breakpoint and every rule in this
+section are unchanged. See §26.16.
+
 ## 15. Market Data
 
 ### 15.1 Provider
@@ -2090,6 +2095,32 @@ including every reset/invalidation rule in this section; only the markup
 boundary changed. The company-name filter (§26.5) remains inline in
 `+page.svelte`, unextracted, per TASK-041's own recommendation. See
 `docs/architecture/frontend-architecture-audit.md` §28 for the concrete
+implementation-status note.
+
+### 26.16 StockPresentation Extraction (TASK-043)
+
+TASK-043 implemented the second phase of TASK-041's plan, relocating the responsive Table/Card
+presentation responsibility described in §14.6 from `+page.svelte` into a new dedicated component:
+
+```text
+StockPresentation.svelte
+  -> owns responsive Table/Card selection (presentationMode, the breakpoint
+     matchMedia listener, and the mutually exclusive {#if})
+
++page.svelte
+  -> supplies already filtered/sorted stocks (visibleStocks) and the
+     existing workflow callbacks (onSort/onRemove/onSaveTargetPrice), plus
+     sort/busy/allocationBySymbol; it no longer knows or needs to know
+     whether Table or Cards is currently active
+```
+
+`presentationMode`'s own semantics — the 1120px breakpoint, the SSR guard, the `matchMedia`
+`change`-listener pattern, and the "exactly one presentation mounted" accessibility rule — are
+unchanged from §14.6/§26.13; only the component boundary that owns them moved, following the same
+precedent (`WatchlistTabs`' `capacity`) that §26.13 already used to justify component-local
+ownership. Sort state, allocation state/invalidation, the Target Price and stock-removal mutation
+workflows, and `managementBusy` all remain owned by `+page.svelte` exactly as before; only presentation-layer
+composition changed. See `docs/architecture/frontend-architecture-audit.md` §29 for the concrete
 implementation-status note.
 
 ---

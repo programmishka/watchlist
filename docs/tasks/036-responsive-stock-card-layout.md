@@ -1857,6 +1857,18 @@ to:
 Status: Done
 ```
 
+---
+
+## Follow-Up: TASK-043
+
+TASK-043 later moved the responsive Table/Card presentation lifecycle established here
+(`presentationMode`, the SSR guard, and the `matchMedia` breakpoint listener) from `+page.svelte`
+into a new dedicated `StockPresentation.svelte` component. The 1120px breakpoint, the pure
+`stockPresentationModeForWidth()` mapping, and every presentation rule this task established are
+unchanged — only the component boundary that owns the responsive state moved. See
+`ARCHITECTURE.md` §14.6/§26.16 and `docs/architecture/frontend-architecture-audit.md` §29. This
+task's own status remains `Done`; no finding above was revised.
+
 Do not modify unrelated task statuses.
 
 ---

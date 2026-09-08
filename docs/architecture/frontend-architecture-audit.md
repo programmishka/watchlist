@@ -1139,3 +1139,51 @@ moved into that component's own scoped `<style>` block, per §47.
 
 `StockPresentation`/`presentationMode` (TASK-043) and `watchlistWorkspace.svelte.ts` (TASK-044)
 remain unimplemented, as intended — TASK-042 does not proceed to either.
+
+## 29. TASK-043 Implementation Status
+
+TASK-043 implemented the second phase of §23's plan: `src/lib/components/StockPresentation.svelte`
+now exists and owns `presentationMode` (moved from `+page.svelte`, following the exact
+`WatchlistTabs`-`capacity` SSR-guard/`matchMedia`-listener precedent this audit's §12 identified).
+It renders the same mutually exclusive `{#if presentationMode === 'table'} <WatchlistTable ... />
+{:else} <WatchlistCards ... /> {/if}` `+page.svelte` previously rendered, unchanged in every
+Table/Card prop except that they now originate one layer down. `+page.svelte` no longer imports
+`WatchlistTable`/`WatchlistCards`/`watchlistPresentation.ts` directly, no longer computes
+`currentPresentationMode()`, and no longer owns the breakpoint `$effect` — it composes
+`StockPresentation` exactly like `StockAddForm`/`InvestmentAllocationControls` from TASK-042 §28,
+passing `visibleStocks`/`sort`/`managementBusy`/`allocationBySymbol`/`onSort`/`onRemove`/
+`onSaveTargetPrice` straight through. `+page.svelte` shrank from 707 to 657 lines.
+
+**Prop API.** `StockPresentation` takes the exact same props `WatchlistTable`/`WatchlistCards`
+already shared (`stocks`, `sort`, `busy`, `allocationBySymbol`, `onSort`, `onRemove`,
+`onSaveTargetPrice`) and passes them straight through to whichever it mounts — no `activeView`-style
+object dump (§9.1's rejected shape), since the two components' props were already this cohesive
+before TASK-043.
+
+**Empty/filtered-empty state and count footer** were *not* moved into `StockPresentation`, per
+TASK-043's own explicit instruction to preserve the current division unless moving them clearly
+improved responsibility: `+page.svelte`'s `{#if activeView.stocks.length === 0}` /
+`{:else if filteredStocks.length === 0}` branches still gate the `{:else}` branch that now renders
+`StockPresentation`, so the component still only ever mounts when there is at least one visible
+stock to show, exactly as the inline `WatchlistTable`/`WatchlistCards` branch did before. The
+`Total: N stocks · Filtered: M stocks` footer likewise remains page-level, unchanged.
+
+**No CSS moved.** `+page.svelte`'s `<style>` block contained no Table/Card-presentation-specific
+rules to begin with (`.table-container`, `.cards-grid`, etc. already lived in
+`WatchlistTable.svelte`/`WatchlistCards.svelte` since TASK-036) — only page-layout CSS remains,
+unchanged.
+
+**Naming collision (§9/§19, deferred to optional TASK-045):** confirmed present but still low
+severity after implementation. `watchlistPresentation.ts` (pure width→mode helper) and
+`StockPresentation.svelte` (the new component that imports and calls it) now sit one import away
+from each other in the same file; a newcomer skimming import lists could plausibly conflate the
+two on name alone before opening either file. Not renamed in TASK-043 per its own explicit
+instruction; still recommended as an optional TASK-045 naming pass, unchanged from this audit's
+original assessment.
+
+Behavior verified unchanged: `stock-cards.spec.ts`'s full presentation/sorting/mutation/
+cross-presentation suite and `responsive-layout.spec.ts`'s breakpoint-boundary test all pass
+unmodified except for two new strict-mode "exactly one Target Price input / exactly one Remove
+button" assertions added to the two cross-presentation state-preservation tests (§61 of the task),
+which would fail if `StockPresentation` ever mounted both `WatchlistTable` and `WatchlistCards`
+simultaneously.
