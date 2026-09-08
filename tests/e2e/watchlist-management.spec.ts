@@ -456,6 +456,42 @@ test.describe('Watchlist management', () => {
 		await expect(page.getByRole('button', { name: 'Remove watchlist "Dividend"' })).toHaveCount(0);
 	});
 
+	test('the active-watchlist delete control uses a decorative inline SVG, not the former text glyph (TASK-045)', async ({
+		page
+	}) => {
+		await mockWatchlistsMetadata(page, {
+			activeWatchlistId: 'wl-1',
+			watchlists: [{ id: 'wl-1', name: 'Main' }]
+		});
+		await mockWatchlistView(page, 'wl-1', {
+			id: 'wl-1',
+			name: 'Main',
+			stocks: [AAPL_STOCK],
+			warnings: []
+		});
+
+		await page.goto('/');
+		const deleteButton = page.getByRole('button', { name: 'Remove watchlist "Main"' });
+
+		// The `×` text glyph is gone; the accessible name comes solely from
+		// `aria-label`, and the decorative SVG is excluded from the
+		// accessibility tree (§9-12, §41-42).
+		await expect(deleteButton).not.toContainText('×');
+		const svg = deleteButton.locator('svg');
+		await expect(svg).toHaveCount(1);
+		await expect(svg).toHaveAttribute('aria-hidden', 'true');
+		await expect(deleteButton.getByRole('img')).toHaveCount(0);
+
+		// Square hit area (§16, §47) and the icon staying within it (§20, §48).
+		const buttonBox = await deleteButton.boundingBox();
+		const svgBox = await svg.boundingBox();
+		expect(buttonBox).not.toBeNull();
+		expect(svgBox).not.toBeNull();
+		expect(buttonBox!.width).toBeCloseTo(buttonBox!.height, 1);
+		expect(svgBox!.width).toBeLessThanOrEqual(buttonBox!.width);
+		expect(svgBox!.height).toBeLessThanOrEqual(buttonBox!.height);
+	});
+
 	test('the watchlist-name input has maxlength=50 and rejects an over-limit name locally (TASK-038)', async ({
 		page
 	}) => {

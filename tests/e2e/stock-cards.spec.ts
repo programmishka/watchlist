@@ -310,7 +310,15 @@ test.describe('Stock Cards: mutation and filtering', () => {
 		}));
 
 		await page.goto('/');
-		await page.getByRole('button', { name: 'Remove SAP.DE' }).click();
+		const removeButton = page.getByRole('button', { name: 'Remove SAP.DE' });
+
+		// Card stock removal uses the same decorative Trash SVG as the table
+		// (TASK-045 §6, §41-42), not the former emoji.
+		const svg = removeButton.locator('svg');
+		await expect(svg).toHaveCount(1);
+		await expect(svg).toHaveAttribute('aria-hidden', 'true');
+
+		await removeButton.click();
 
 		expect(removeCalls.calls).toEqual(['SAP.DE']);
 		await expect(stockRow(page, 'SAP.DE')).toHaveCount(0);

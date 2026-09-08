@@ -226,6 +226,32 @@ test.describe('Stock management', () => {
 		await expect(page.getByText('SAP.DE')).toBeVisible();
 	});
 
+	test('the stock-remove control uses a decorative inline SVG, not a font/emoji glyph (TASK-045)', async ({
+		page
+	}) => {
+		await mockSingleWatchlist(page);
+
+		await page.goto('/');
+		const removeButton = page.getByRole('button', { name: 'Remove SAP.DE' });
+
+		// The SVG carries no accessible name/role of its own; the button's
+		// `aria-label` remains the sole accessible name (§7-8, §41-42).
+		await expect(removeButton).toBeVisible();
+		const svg = removeButton.locator('svg');
+		await expect(svg).toHaveCount(1);
+		await expect(svg).toHaveAttribute('aria-hidden', 'true');
+		await expect(removeButton.getByRole('img')).toHaveCount(0);
+
+		// Square hit area (§16, §47) and the icon staying within it (§20, §48).
+		const buttonBox = await removeButton.boundingBox();
+		const svgBox = await svg.boundingBox();
+		expect(buttonBox).not.toBeNull();
+		expect(svgBox).not.toBeNull();
+		expect(buttonBox!.width).toBeCloseTo(buttonBox!.height, 1);
+		expect(svgBox!.width).toBeLessThanOrEqual(buttonBox!.width);
+		expect(svgBox!.height).toBeLessThanOrEqual(buttonBox!.height);
+	});
+
 	test('keeps the row and view when removal fails', async ({ page }) => {
 		await mockSingleWatchlist(page);
 		await mockRemoveStock(page, WATCHLIST_ID, () => ({

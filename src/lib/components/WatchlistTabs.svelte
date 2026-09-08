@@ -138,7 +138,21 @@
 						disabled={disabled || deleteBusy}
 						onclick={onDeleteActive}
 					>
-						×
+						<svg
+							class="icon-watchlist-remove"
+							viewBox="0 0 24 24"
+							fill="none"
+							xmlns="http://www.w3.org/2000/svg"
+							aria-hidden="true"
+						>
+							<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" />
+							<path
+								d="M14.5 9.5L9.5 14.5M9.5 9.5L14.5 14.5"
+								stroke="currentColor"
+								stroke-width="1.5"
+								stroke-linecap="round"
+							/>
+						</svg>
 					</button>
 				{/if}
 			</span>
@@ -245,19 +259,27 @@
 		opacity: 0.6;
 	}
 
-	/* Delete-button geometry/centering fix (TASK-035 §24-26): an explicit
-	   equal width/height grid with no padding, rather than relying on
-	   line-height/padding to visually center the glyph. */
+	/* Delete-button geometry/centering (TASK-035 §24-26, superseded by the
+	   shared `.btn-icon` square-grid geometry from TASK-045 §16-19). This
+	   variant only adds what's specific to the circular Close artwork:
+	   rounding the hit area to match the SVG's own circle, and spacing it
+	   from the tab label. The supplied Close SVG already draws a full red
+	   circular outline (TASK-045 §20-21); keeping `.btn-destructive`'s red
+	   border here would render as a visible double circle, so it is
+	   suppressed and the SVG's own circle is the only ring drawn. */
 	.tab-delete {
 		flex: 0 0 auto;
-		display: inline-grid;
-		place-items: center;
-		width: 1.85rem;
-		height: 1.85rem;
-		padding: 0;
 		margin-inline-end: 0.35rem;
 		border-radius: 999px;
-		line-height: 1;
+		border-color: transparent;
+	}
+
+	/* Close icon application size (TASK-045 §14, §36): sized generously
+	   relative to the trash icon so the supplied circular outline remains
+	   clearly a ring, not a smudge, at this compact size. */
+	.icon-watchlist-remove {
+		width: 1.3rem;
+		height: 1.3rem;
 	}
 
 	.overflow {

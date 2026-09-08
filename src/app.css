@@ -167,15 +167,29 @@ body {
 	border: 0;
 }
 
-/* Compact square icon buttons (TASK-034 §12, §48): the active-tab delete
-   control and the per-row stock-remove action. Deliberately smaller than
-   `.btn-compact` because they carry a single glyph, not a text label. */
+/* Compact square icon buttons (TASK-034 §12, §48; explicit square geometry
+   TASK-045 §16-19): the active-tab delete control and the per-row
+   stock-remove action. Deliberately smaller than `.btn-compact`. Both
+   buttons render a single decorative SVG rather than a text glyph, so
+   centering uses explicit grid geometry instead of line-height/padding
+   metrics tuned for a glyph's baseline. */
 .btn-icon {
-	min-height: 1.85rem;
-	min-width: 1.85rem;
-	padding: 0.2rem 0.4rem;
-	font-size: 0.95rem;
-	line-height: 1;
+	/* `.btn`'s 2.75rem `min-height` floor would otherwise win over this
+	   smaller explicit height (a min-height floor always overrides a smaller
+	   height, regardless of selector order/specificity), silently breaking
+	   squareness. */
+	min-height: 0;
+	min-width: 0;
+	width: 1.85rem;
+	height: 1.85rem;
+	padding: 0;
+	display: inline-grid;
+	place-items: center;
+}
+
+/* Block-level SVG avoids inline-text baseline offset (TASK-045 §17). */
+.btn-icon svg {
+	display: block;
 }
 
 /* Shared workspace-toolbar group layout (TASK-034 §21-23, relocated here by
