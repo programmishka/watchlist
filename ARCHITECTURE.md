@@ -2065,6 +2065,15 @@ identically to whichever of `WatchlistTable`/`WatchlistCards` the current
 (e.g. the sort-direction accessible-name label) — it owns no persisted state
 of its own, matching `WatchlistTable`.
 
+### 26.14 Frontend Architecture Audit (TASK-041)
+
+TASK-041 audited the responsibility and state-ownership structure that
+accumulated across TASK-016 through TASK-036 (summarized above) and produced
+a justified, incremental refactoring plan without changing any accepted
+architecture described in this section. See
+`docs/architecture/frontend-architecture-audit.md` for the full analysis,
+component/state inventories, and the proposed TASK-042+ sequence.
+
 ---
 
 ## 27. Testing Strategy
