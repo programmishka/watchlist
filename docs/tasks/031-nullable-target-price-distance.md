@@ -4,6 +4,16 @@
 
 Done
 
+> **Superseded in part by TASK-046:** this task explicitly preserved the pre-existing
+> `calculateInvestmentFactor` behavior that collapsed a real zero distance and an unavailable
+> (`undefined`) distance to the same `factor = 0` (see the "factor = 0" / "Where useful, add a
+> concise note that TASK-031 preserves factor-0 allocation behavior..." passages below). TASK-046
+> identified that as a real defect, not a permanent exception, and corrected it: an exact numeric
+> zero distance (including `-0`) is now evaluated by the regular formula (`factor = 1`); an
+> unavailable distance still yields `factor = 0`. The nullable `distanceToTarget` semantics this
+> task introduced — missing stays `undefined`, real zero stays numeric `0` — are otherwise
+> unchanged and remain authoritative. See ARCHITECTURE.md §21.1/§22.2.
+
 ## Goal
 
 Correct the semantic representation of `distanceToTarget`.

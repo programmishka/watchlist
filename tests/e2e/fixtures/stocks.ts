@@ -79,3 +79,37 @@ export const EQUAL_PRICE_TARGET_STOCK: WatchlistStock = {
 	dividendYield: 0,
 	marketCapBillionsUsd: 10
 };
+
+/**
+ * Reproduces the TASK-046 defect report directly: a JPY Price above 14,000
+ * that must remain fully inspectable (full DOM text + matching native
+ * title) despite the table's compact, truncating numeric columns.
+ */
+export const JPY_LARGE_PRICE_STOCK: WatchlistStock = {
+	symbol: 'JPYBIG',
+	name: 'Japan Large Cap KK',
+	price: 14310.75,
+	currency: 'JPY',
+	targetPrice: 15000,
+	distanceToTarget: 14310.75 / 15000 - 1,
+	dividendYield: 0.0088,
+	marketCapBillionsUsd: 523.456
+};
+
+/**
+ * Reproduces the TASK-046 locale-input defect report directly: a fractional
+ * Price and Target Price that must render with the same locale decimal
+ * separator, with Price and Target Price exactly equal — the same scenario
+ * used to reproduce the TASK-046 zero-distance allocation defect, since the
+ * Product Owner's report is literally one stock exhibiting both symptoms.
+ */
+export const FRACTIONAL_EQUAL_PRICE_TARGET_STOCK: WatchlistStock = {
+	symbol: 'FRACEQ',
+	name: 'Fractional Equal Price AG',
+	price: 149.3,
+	currency: 'EUR',
+	targetPrice: 149.3,
+	distanceToTarget: 0,
+	dividendYield: 0.01,
+	marketCapBillionsUsd: 42.5
+};

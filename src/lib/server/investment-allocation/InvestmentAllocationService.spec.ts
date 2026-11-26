@@ -78,15 +78,16 @@ describe('InvestmentAllocationService.calculateAllocation — rounding', () => {
 	});
 });
 
-describe('InvestmentAllocationService.calculateAllocation — real zero and unavailable distance (TASK-031)', () => {
-	it('gives a real zero-distance stock factor 0 and savings 0, per existing domain semantics', async () => {
+describe('InvestmentAllocationService.calculateAllocation — real zero and unavailable distance (TASK-046, supersedes TASK-031 legacy factor-0 behavior)', () => {
+	it('gives a real zero-distance stock the regular positive factor and a nonzero savings share', async () => {
 		const queryService = fixedQueryService(view([stock('AAPL', 0), stock('SAP.DE', -0.5)]));
 		const service = new InvestmentAllocationService(queryService);
 
 		const result = await service.calculateAllocation('user-1', 'wl-1', 200);
 
-		expect(result.allocations[0]).toEqual({ symbol: 'AAPL', factor: 0, savingsAmount: 0 });
-		expect(result.allocations[1].savingsAmount).toBeGreaterThan(0);
+		// factor(AAPL) = 1/(1+0) = 1; factor(SAP.DE) = 1/(1-0.5) = 2; sum = 3.
+		expect(result.allocations[0]).toEqual({ symbol: 'AAPL', factor: 1, savingsAmount: 66 });
+		expect(result.allocations[1]).toEqual({ symbol: 'SAP.DE', factor: 2, savingsAmount: 133 });
 	});
 
 	it('gives an unavailable-distance stock factor 0 and savings 0, without preventing other stocks from participating', async () => {
@@ -99,7 +100,7 @@ describe('InvestmentAllocationService.calculateAllocation — real zero and unav
 		expect(result.allocations[1].savingsAmount).toBe(100);
 	});
 
-	it('proves real zero and unavailable distance are separate input states even though they currently yield the same factor', async () => {
+	it('proves real zero and unavailable distance are separate input states with distinct factors (zero now participates, unavailable remains excluded)', async () => {
 		const queryService = fixedQueryService(
 			view([stock('ZERO', 0), stock('UNAVAILABLE', undefined)])
 		);
@@ -107,13 +108,16 @@ describe('InvestmentAllocationService.calculateAllocation — real zero and unav
 
 		const result = await service.calculateAllocation('user-1', 'wl-1', 100);
 
-		expect(result.allocations[0]).toEqual({ symbol: 'ZERO', factor: 0, savingsAmount: 0 });
+		expect(result.allocations[0]).toEqual({ symbol: 'ZERO', factor: 1, savingsAmount: 100 });
 		expect(result.allocations[1]).toEqual({ symbol: 'UNAVAILABLE', factor: 0, savingsAmount: 0 });
 	});
 
-	it('produces invested 0 without NaN/Infinity when every stock has factor 0', async () => {
+	it('produces invested 0 without NaN/Infinity when every stock has a defensively-zeroed or unavailable factor', async () => {
+		// Distance -1 makes the formula's own intermediate result (1/0 =
+		// Infinity) non-finite, which is defensively sanitized to factor 0 —
+		// distinct from a real zero distance, which now yields factor 1.
 		const queryService = fixedQueryService(
-			view([stock('A', 0), stock('B', undefined), stock('C', 0)])
+			view([stock('A', -1), stock('B', undefined), stock('C', -1)])
 		);
 		const service = new InvestmentAllocationService(queryService);
 
@@ -122,6 +126,48 @@ describe('InvestmentAllocationService.calculateAllocation — real zero and unav
 		expect(result.allocations.map((a) => a.savingsAmount)).toEqual([0, 0, 0]);
 		expect(result.invested).toBe(0);
 		expect(Number.isFinite(result.invested)).toBe(true);
+	});
+
+	it('gives a single stock exactly at its Target Price the full savings budget (regression: exact-zero-distance allocation)', async () => {
+		const queryService = fixedQueryService(view([stock('EQUAL', 0)]));
+		const service = new InvestmentAllocationService(queryService);
+
+		const result = await service.calculateAllocation('user-1', 'wl-1', 5000);
+
+		expect(result.allocations).toEqual([{ symbol: 'EQUAL', factor: 1, savingsAmount: 5000 }]);
+		expect(result.invested).toBe(5000);
+	});
+
+	it('weighs a mixed portfolio of negative, zero, positive, and unavailable distances using independently calculated expectations', async () => {
+		const queryService = fixedQueryService(
+			view([stock('NEG', -0.5), stock('ZERO', 0), stock('POS', 1), stock('UNAVAILABLE', undefined)])
+		);
+		const service = new InvestmentAllocationService(queryService);
+
+		// factor: NEG 2, ZERO 1, POS 0.5, UNAVAILABLE 0; sum = 3.5.
+		// totalSavings = 350 keeps every share an exact integer.
+		const result = await service.calculateAllocation('user-1', 'wl-1', 350);
+
+		expect(result.allocations).toEqual([
+			{ symbol: 'NEG', factor: 2, savingsAmount: 200 },
+			{ symbol: 'ZERO', factor: 1, savingsAmount: 100 },
+			{ symbol: 'POS', factor: 0.5, savingsAmount: 50 },
+			{ symbol: 'UNAVAILABLE', factor: 0, savingsAmount: 0 }
+		]);
+		expect(result.invested).toBe(350);
+	});
+
+	it('retains no-allocation behavior for a portfolio containing only unavailable distances', async () => {
+		const queryService = fixedQueryService(view([stock('A', undefined), stock('B', undefined)]));
+		const service = new InvestmentAllocationService(queryService);
+
+		const result = await service.calculateAllocation('user-1', 'wl-1', 1000);
+
+		expect(result.allocations).toEqual([
+			{ symbol: 'A', factor: 0, savingsAmount: 0 },
+			{ symbol: 'B', factor: 0, savingsAmount: 0 }
+		]);
+		expect(result.invested).toBe(0);
 	});
 });
 

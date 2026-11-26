@@ -56,15 +56,17 @@ export function calculateTargetPriceDistance(
 /**
  * A missing distance (cannot participate in allocation, TASK-031 §24) and a
  * real zero distance (current price exactly equals Target Price) are
- * distinct input states that happen to both yield factor `0` under this
- * existing formula — `!targetPriceDistance` is true for both `undefined` and
- * `0`. This is intentional legacy behavior for the zero case, preserved
- * as-is; only the meaning of the missing case changed (TASK-031 supersedes
- * TASK-003's use of `0` as a missing-data sentinel upstream of this
- * function).
+ * distinct input states. TASK-003/TASK-031 previously conflated them via
+ * `!targetPriceDistance`, which is also true for a real `0` — that legacy
+ * behavior is corrected by TASK-046: only a genuinely missing/non-finite
+ * distance yields factor `0` here; an exact numeric zero (including `-0`,
+ * which is also `Number.isFinite`) is evaluated by the regular formula below,
+ * giving `1 / (1 + 0) = 1` — a stock exactly at its Target Price receives the
+ * same proportional share as any other stock with a `1` factor, not an
+ * automatic exclusion from allocation.
  */
 export function calculateInvestmentFactor(targetPriceDistance: number | undefined): number {
-	if (!targetPriceDistance) {
+	if (targetPriceDistance === undefined || !Number.isFinite(targetPriceDistance)) {
 		return 0;
 	}
 

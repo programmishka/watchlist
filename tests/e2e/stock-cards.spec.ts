@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { AAPL_STOCK, GAW_L_STOCK, SAP_DE_STOCK, UNKNOWN_STOCK } from './fixtures/stocks';
+import {
+	AAPL_STOCK,
+	FRACTIONAL_EQUAL_PRICE_TARGET_STOCK,
+	GAW_L_STOCK,
+	SAP_DE_STOCK,
+	UNKNOWN_STOCK
+} from './fixtures/stocks';
 import {
 	mockAddStock,
 	mockCalculateInvestmentAllocation,
@@ -109,8 +115,21 @@ test.describe('Stock Cards: presentation and content', () => {
 		await mockSingleWatchlist(page, [SAP_DE_STOCK, AAPL_STOCK]);
 		await page.goto('/');
 
-		await expect(page.getByLabel('Target price for SAP.DE')).toHaveValue('150');
+		await expect(page.getByLabel('Target price for SAP.DE')).toHaveValue('150.00'); // minimum two decimal places (TASK-046 follow-up)
 		await expect(page.getByLabel('Target price for AAPL')).toHaveValue('');
+	});
+
+	test.describe('German locale (TASK-046)', () => {
+		test.use({ locale: 'de-DE' });
+
+		test('Card Price and the Target Price input use the same decimal comma', async ({ page }) => {
+			await mockSingleWatchlist(page, [FRACTIONAL_EQUAL_PRICE_TARGET_STOCK]);
+			await page.goto('/');
+
+			const card = stockRow(page, 'FRACEQ');
+			await expect(card).toContainText('149,30 EUR'); // Price (TASK-036 formatPriceWithCurrency)
+			await expect(page.getByLabel('Target price for FRACEQ')).toHaveValue('149,30'); // Target Price: same minimum-two-decimal/decimal-separator policy (TASK-046 follow-up)
+		});
 	});
 
 	test('applies favorable presentation to a negative Distance to Target', async ({ page }) => {
@@ -372,7 +391,7 @@ test.describe('Stock Cards: mutation and filtering', () => {
 		await input.fill('200');
 		await input.blur();
 
-		await expect(input).toHaveValue('200');
+		await expect(input).toHaveValue('200.00'); // canonical minimum-two-decimal display (TASK-046 follow-up)
 		await expect(distanceValue(page, 'SAP.DE')).toContainText('-9.75%');
 	});
 

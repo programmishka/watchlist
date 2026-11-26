@@ -77,11 +77,32 @@ describe('calculateInvestmentFactor', () => {
 		expect(calculateInvestmentFactor(-0.2)).toBeCloseTo(1 / 0.8);
 	});
 
-	it('is zero for an exact distance of 0 (intentional legacy semantics)', () => {
-		expect(calculateInvestmentFactor(0)).toBe(0);
+	it('reproduces the old TASK-003/TASK-031 legacy behavior under the pre-fix conflation (characterization)', () => {
+		// The exact legacy condition this task removes: `!targetPriceDistance`
+		// is true both for a real zero and for `undefined`, which is why the
+		// old implementation collapsed them to the same factor. This
+		// characterizes the removed defect; it is not a test of current
+		// `calculateInvestmentFactor` behavior (asserted separately below).
+		function legacyCalculateFactor(targetPriceDistance: number | undefined): number {
+			if (!targetPriceDistance) {
+				return 0;
+			}
+			return 1 / (1 + targetPriceDistance);
+		}
+
+		expect(legacyCalculateFactor(0)).toBe(0);
+		expect(legacyCalculateFactor(undefined)).toBe(0);
 	});
 
-	it('is zero when the distance is missing', () => {
+	it('is the regular formula result for an exact distance of 0, not an automatic exclusion (TASK-046, supersedes TASK-003/TASK-031)', () => {
+		expect(calculateInvestmentFactor(0)).toBe(1);
+	});
+
+	it('treats negative zero exactly like positive zero', () => {
+		expect(calculateInvestmentFactor(-0)).toBe(1);
+	});
+
+	it('is zero when the distance is missing (undefined remains excluded)', () => {
 		expect(calculateInvestmentFactor(undefined)).toBe(0);
 	});
 
@@ -95,6 +116,26 @@ describe('calculateInvestmentFactor', () => {
 
 	it('is zero for a NaN distance', () => {
 		expect(calculateInvestmentFactor(NaN)).toBe(0);
+	});
+
+	it.each([
+		['Infinity', Infinity],
+		['-Infinity', -Infinity]
+	])('is zero for a non-finite %s distance', (_label, distance) => {
+		expect(calculateInvestmentFactor(distance)).toBe(0);
+	});
+
+	it('uses the actual numeric distance rather than its formatted/rounded display value', () => {
+		// A tiny nonzero distance can display as "0.00%" (two-decimal
+		// rounding), but the domain formula must still use the real value and
+		// must not be confused with an exact-zero distance.
+		const tinyDistance = 0.00001;
+		const exactZeroFactor = calculateInvestmentFactor(0);
+		const tinyDistanceFactor = calculateInvestmentFactor(tinyDistance);
+
+		expect(exactZeroFactor).toBe(1);
+		expect(tinyDistanceFactor).toBeCloseTo(1 / 1.00001);
+		expect(tinyDistanceFactor).not.toBe(exactZeroFactor);
 	});
 });
 
@@ -235,5 +276,39 @@ describe('full allocation pipeline', () => {
 
 		expect(invested).toBeLessThanOrEqual(totalSavings);
 		expect(invested).toBe(99);
+	});
+});
+
+describe('full allocation pipeline — zero-distance correction (TASK-046)', () => {
+	it('gives an exact Target Price match the regular formula share, not zero', () => {
+		const distances = [0];
+		const factors = distances.map(calculateInvestmentFactor);
+		const allocation = calculateSavingsAllocation(factors, 1000);
+
+		expect(factors).toEqual([1]);
+		expect(allocation).toEqual([1000]);
+	});
+
+	it('weighs a mixed portfolio of negative, zero, positive, and unavailable distances using independently calculated expectations', () => {
+		// factor = 1 / (1 + distance): -0.5 -> 2, 0 -> 1, 1 -> 0.5, undefined -> 0
+		const distances: (number | undefined)[] = [-0.5, 0, 1, undefined];
+		const factors = distances.map(calculateInvestmentFactor);
+		expect(factors).toEqual([2, 1, 0.5, 0]);
+
+		// factorSum = 3.5; totalSavings chosen so every share is an exact
+		// integer, isolating the zero-distance weighting from rounding.
+		const allocation = calculateSavingsAllocation(factors, 350);
+		expect(allocation).toEqual([200, 100, 50, 0]);
+		expect(calculateInvestedTotal(allocation)).toBe(350);
+	});
+
+	it('retains no-allocation behavior for a portfolio containing only unavailable distances', () => {
+		const distances: (number | undefined)[] = [undefined, undefined, undefined];
+		const factors = distances.map(calculateInvestmentFactor);
+		const allocation = calculateSavingsAllocation(factors, 1000);
+
+		expect(factors).toEqual([0, 0, 0]);
+		expect(allocation).toEqual([0, 0, 0]);
+		expect(calculateInvestedTotal(allocation)).toBe(0);
 	});
 });

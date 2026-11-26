@@ -1401,7 +1401,18 @@ A numeric distance is produced only when `regularMarketPrice` and `targetPrice` 
 
 > `distanceToTarget = 0` is a real calculated value meaning current market price equals Target Price. It is never used as a missing-data sentinel.
 
-Nullable semantics are established once, in the pure `calculateTargetPriceDistance` domain function, and survive unchanged through Watchlist composition, the REST response, the client model, and the UI — no layer along that path converts an unavailable distance back to `0` (§24.6, §26.4). The one deliberate exception is the pure `calculateInvestmentFactor` formula (§22.2), which — per established legacy semantics predating TASK-031 — treats both `0` and `undefined` as "does not participate," collapsing them to `factor = 0`; this does not reintroduce the ambiguity upstream, since `distanceToTarget` itself still distinguishes the two states everywhere else.
+Nullable semantics are established once, in the pure `calculateTargetPriceDistance` domain function, and survive unchanged through Watchlist composition, the REST response, the client model, and the UI — no layer along that path converts an unavailable distance back to `0` (§24.6, §26.4).
+
+**Correction (TASK-046, superseding the paragraph below).** `calculateInvestmentFactor` (§22.2)
+previously treated both `0` and `undefined` as "does not participate," per legacy semantics
+predating TASK-031 (TASK-003's original implementation, explicitly preserved by TASK-031). That was
+a real defect, not a documented permanent exception: a stock whose current price exactly equals its
+Target Price is a valid valuation (distance `0`), not missing data, and was wrongly excluded from
+allocation — the Product Owner observed exactly this (Savings Amount `0 €` for a stock correctly
+showing `0,00 %` Distance). TASK-046 corrects `calculateInvestmentFactor` to evaluate an exact
+numeric zero (including `-0`) with the regular formula; only a genuinely missing/non-finite distance
+now yields factor `0`. See §22.2 for the corrected formula and the historical paragraph it
+supersedes.
 
 ---
 
@@ -1457,13 +1468,15 @@ For every stock:
 factor = 1 / (1 + distanceToTarget)
 ```
 
-Following the existing semantics, a missing/falsy distance produces factor `0`. An unavailable Target Price distance (`undefined`, §21.1) results in investment factor `0` and therefore no savings allocation for that stock, without preventing other valid stocks from participating.
-
-Conceptually:
+**Current semantics (TASK-046, superseding the historical paragraphs/snippet below).** Only a
+genuinely unavailable distance (`undefined`, §21.1) or a non-finite distance produces factor `0`. An
+exact numeric zero distance — including JavaScript negative zero, which is
+`Number.isFinite(-0) === true` — is a real valuation (current price exactly equals Target Price, not
+missing data) and is evaluated by the regular formula above, giving `factor = 1 / (1 + 0) = 1`:
 
 ```ts
-function calculateFactor(targetPriceDistance?: number) {
-  if (!targetPriceDistance) {
+function calculateFactor(targetPriceDistance: number | undefined): number {
+  if (targetPriceDistance === undefined || !Number.isFinite(targetPriceDistance)) {
     return 0;
   }
 
@@ -1471,13 +1484,37 @@ function calculateFactor(targetPriceDistance?: number) {
 }
 ```
 
-`!targetPriceDistance` is true both for a real zero distance and for an unavailable (`undefined`) distance, so both currently yield `factor = 0` — this is pre-existing, intentional legacy behavior (TASK-003/TASK-014), not a reintroduction of the `0`/unavailable ambiguity: `distanceToTarget` itself keeps the two states distinct everywhere upstream of this formula (§21.1), and this task does not change the formula.
+A stock exactly at its Target Price therefore receives the same proportional share as any other
+stock whose distance happens to also produce a `1` factor — it is no longer automatically excluded
+from allocation. An unavailable Target Price distance (`undefined`) still results in investment
+factor `0` and therefore no savings allocation for that stock, without preventing other valid stocks
+from participating.
 
 Mathematically invalid or non-finite factor results do not participate in
 the allocation and are treated as factor `0`.
 
 Factors that are non-finite or non-positive are treated as `0` during
 factor summation and allocation.
+
+**Historical behavior (TASK-003/TASK-031, corrected by TASK-046 above).** The original
+implementation used `!targetPriceDistance` as its guard, which is `true` both for a real zero
+distance and for an unavailable (`undefined`) distance, so both yielded `factor = 0`. This was
+treated as pre-existing, intentional legacy behavior (TASK-003/TASK-014), explicitly preserved by
+TASK-031 when it introduced nullable `distanceToTarget` (§21.1) — not a reintroduction of the
+`0`/unavailable ambiguity upstream, since `distanceToTarget` itself kept the two states distinct
+everywhere above this formula. The Product Owner subsequently observed the concrete consequence — a
+stock exactly at its Target Price receiving `0 €` Savings Amount — which TASK-046 corrects. This
+historical snippet is kept for record only and no longer describes current behavior:
+
+```ts
+function calculateFactor(targetPriceDistance?: number) {
+  if (!targetPriceDistance) {
+    return 0; // also true for a real zero distance — this was the defect
+  }
+
+  return 1 / (1 + targetPriceDistance);
+}
+```
 
 ### 22.3 Factor Sum
 
@@ -2213,6 +2250,150 @@ unchanged and remains the layer responsible for real DOM/ARIA/browser-event veri
 
 See `docs/architecture/frontend-architecture-audit.md` §30 for the concrete implementation-status
 note.
+
+### 26.18 Complete Financial Values via Native Titles (TASK-040, extended by TASK-046)
+
+> A compact table column may visually shorten a value with CSS; it must never shorten the
+> underlying DOM text or the value available on hover.
+
+TASK-040 first introduced this for Savings Amount only, as a small UI-polish item alongside that
+task's primary structured-diagnostics work (§33); that earlier addition was not reflected in this
+document. The Product Owner subsequently observed the identical defect for Price (a JPY Price above
+14,000 rendered as `14,310,...` with the digits past the column's visual width unreachable in their
+environment, with hovering not revealing the rest). TASK-046 investigated every numeric display
+column rather than Price alone and extended the existing mechanism — not a new one — to each
+column that can truncate.
+
+**Mechanism.** `WatchlistTable.svelte` renders, per populated numeric cell, a native HTML
+`title` attribute carrying the exact same string produced by the exact same formatter already used
+for the cell's visible text (`formatNumber`/`formatPercentage`/`formatSignedPercentage`/
+`formatWholeEuro`) — never a second, tooltip-specific number format, and never a value computed
+only for the tooltip. The complete formatted value therefore always exists as real DOM text (the
+cell's own text node) independent of whatever the column's `white-space: nowrap`/`text-overflow:
+ellipsis` CSS (§26.10/§26.11) visually does with it; CSS may shorten the rendered glyphs, never the
+underlying text or the `title`.
+
+**Populated columns.** Market Cap (USD bn), Price, Dividend Yield, Distance to Target, and Savings
+Amount each carry this title. Target Price is excluded: it is an editable `<input>` (§26.4), not a
+truncatable text cell, and is addressed instead by §26.19's locale-aware editable-number policy.
+Symbol, Name, Currency, and Actions are non-numeric/non-truncating-in-the-relevant-sense and are
+unaffected.
+
+**Missing vs. real zero.** A cell's `title` is present only when the underlying raw value is
+populated — `value !== undefined && Number.isFinite(value)` (`isDisplayableNumber()`,
+`src/lib/client/format.ts`) — reusing the exact missing/non-finite rule the formatters already apply
+internally rather than a second, potentially diverging rule. A real `0` (e.g. a calculated `€0`
+Savings Amount, or a `0.00%` Distance at exact Target Price, §21.1/§22.2) is populated and receives a
+matching title; the `—` missing-value placeholder never receives one. Using the *formatted* string
+to decide this would be wrong (a tiny nonzero value can itself format as `0.00%`, §22.2) — the check
+is always against the raw numeric value, never the display string.
+
+**Cards need no equivalent.** `WatchlistCards.svelte` already wraps financial values with
+`overflow-wrap: break-word` and no `text-overflow: ellipsis` (§14.6), so Card-mode values never
+truncate in the first place and carry no `title` attribute.
+
+**Supplemental, not the only disclosure.** The full formatted value remains present as ordinary
+accessible DOM text regardless of `title` — screen readers, find-in-page, and copy/paste all see the
+complete value independent of any hover affordance. A native `title` is a desktop mouse-hover
+convenience on top of that, not a replacement for it; it is not a reliable keyboard or touch
+disclosure mechanism (per the HTML specification, not a defect specific to this application), and no
+custom tooltip component is introduced to work around that — see the verification note below.
+
+**Verification note (TASK-046).** Table-cell `title` attributes and their values are identical
+across Chromium and Firefox (verified directly: a headless-Firefox DOM check against a large-Price
+fixture confirmed matching text/`title`). Browser-native tooltip *chrome* itself (the floating
+hover bubble) is an OS/engine-level popup outside the page's own rendering in both browsers and is
+not something Playwright can assert against as page DOM (consistent with this project's existing
+Playwright usage, §27.3) nor something a headless screenshot reliably captures; this is a tooling
+limitation of automated verification, not evidence of a Firefox-specific defect, and no custom
+tooltip was introduced to compensate for it.
+
+### 26.19 Locale-Aware Editable Target Price Formatting (TASK-046, minimum-decimal-places follow-up)
+
+> Editable numeric text and read-only financial display text are two different presentation
+> concerns that happen to share most of a locale policy, not one formatter with two call sites.
+
+The Product Owner observed a decimal-comma locale where Price displayed `149,30` while the
+editable Target Price displayed `149.3` — the same stored value family, rendered with two different
+decimal separators, because `TargetPriceCell.svelte`'s original `formatForInput()` called
+`String(value)`, which always uses `.` regardless of locale. TASK-046 introduced a dedicated
+`formatEditableNumber()` to fix the separator; a follow-up task then observed that its output (e.g.
+`14,3`) was still visually inconsistent with the rest of the application's financial values (e.g.
+`14,00`), since every other numeric column always renders exactly two decimal places (§26.10). The
+rule below is the follow-up's corrected, final behavior; this section no longer describes
+`formatEditableNumber()`'s original no-padding behavior as current (see the historical note at the
+end of this section).
+
+**`formatEditableNumber()`** (`src/lib/client/format.ts`) is dedicated to this one editable input;
+it is not a variant of `formatNumber` and is never used for read-only display. It differs from
+read-only display formatting in exactly the ways this table summarizes:
+
+| Formatting property | Read-only financial values (`formatNumber` etc., §26.10) | Editable Target Price (`formatEditableNumber`) |
+| --- | --- | --- |
+| Locale-aware decimal separator | Yes | Yes |
+| Thousands separators | Yes | No |
+| Decimal places | Exactly two | **At least** two |
+| Additional stored precision preserved | Not required for display | Yes |
+
+* it derives only the locale's **decimal separator** from `Intl.NumberFormat(locale)
+  .formatToParts(1.1)` — the same `Intl`-driven locale policy `formatNumber`/`formatPercentage`/
+  `formatSignedPercentage`/`formatWholeEuro` already use, so editable and display text agree on
+  *which* separator a given locale uses, without hardcoding `,` for German or any other locale;
+* it pads the fractional part up to a **minimum** of two decimal places — `14` renders as `14.00`,
+  `14.3` as `14.30` — but never rounds or truncates a value that already has more: `14.357` stays
+  `14.357`, `123.456789` stays `123.456789` (TASK-038 deliberately allows a Target Price with more
+  than two decimal places, so a maximum-two-decimal formatter like `formatNumber` is never reused
+  here, and `toFixed(2)` is deliberately not used as the general solution — it would silently
+  truncate, e.g. collapsing `0.0025` to `0.00`);
+* it never inserts a thousands-grouping separator — `src/lib/client/targetPriceInput.ts`'s existing
+  parser does not accept one (a second `,`/`.` is rejected, §26.4), so emitting one would make the
+  freshly-rendered value fail to parse back;
+* a missing Target Price still renders as an empty string, matching the existing input behavior
+  (§26.4), never the `—` placeholder and never a misleading `0.00`.
+
+**Scientific-notation expansion.** `Number.prototype.toString()` switches to exponential notation
+(e.g. `1e-7`) for a finite value whose absolute value is below `1e-6`; a private
+`expandExponentialNotation()` helper expands that back into a plain decimal string (e.g.
+`0.0000001`) without rounding or losing any significant digit — only the textual *form* changes,
+digits never do. This expanded, round-trippable form is now preferred over raw scientific notation
+wherever it fits the existing constraint described next.
+
+**Representability limitation (documented, not fixed).** The domain only requires a Target Price to
+be positive, finite, and at most `MAX_TARGET_PRICE` (§29.2) — it documents no minimum — so an
+extremely small pre-existing persisted value could in principle need more digits to expand than fit
+in the existing `TARGET_PRICE_INPUT_MAX_LENGTH` (20 characters, TASK-038). `formatEditableNumber()`
+tries, in order, the padded-and-expanded form, the expanded-but-unpadded form, and finally the
+original (possibly still scientific) `Number.prototype.toString()` text — using the first one that
+fits 20 characters, never silently rounding or truncating digits to force a fit. Concretely, `1e-18`
+expands to exactly 20 characters and is shown as `0.000000000000000001`; `1e-19` would need 21 and
+therefore falls back to the literal `1e-19` text, which the existing parser cannot read back. This
+boundary is a pre-existing limitation of representing a stored number as plain decimal text within a
+fixed-length input (not introduced by either TASK-046 or this follow-up) rather than something
+silently "fixed" by changing the numeric contract, widening the input, or introducing a minimum
+Target Price; no such value is known to exist in current data, and a Product Owner decision would be
+required before this boundary is addressed further.
+
+**No unintended mutation from formatting alone.** `TargetPriceCell.svelte`'s `commit()` treats the
+input as unmodified — a pure no-op, regardless of whether the displayed canonical text happens to be
+parseable — whenever it still exactly equals `formatEditableNumber(committedValue)`. This guards the
+representability edge case above: merely focusing and leaving a Target Price input showing an
+unparseable canonical scientific-notation string (because expansion did not fit) can never produce a
+spurious validation error or an API call, exactly as merely focusing and leaving any other unchanged
+Target Price input does not.
+
+**Unaffected by this task.** Blur/Enter commit semantics, the unchanged-value no-op rule (now
+additionally guarded as above), both accepted decimal separators, `maxlength=20`, the
+`MAX_TARGET_PRICE` bound, and every existing save/error/warning/busy/accessibility behavior (§26.4)
+are unchanged — only how the already-stored numeric value is *rendered into* the input text changed,
+and only Table/Cards' shared `TargetPriceCell` needed updating for both presentations to agree
+(§14.6).
+
+**Historical note.** TASK-046's original `formatEditableNumber()` preserved exact stored precision
+with no minimum padding (e.g. `149.3` rendered as `149,3`), which this follow-up superseded because
+it was still visually inconsistent with every other two-decimal financial column; TASK-046's
+original implementation also could not expand scientific notation, so `1e-7` previously displayed
+literally as `1e-7` rather than `0.0000001`. Both corrections are described as current behavior
+above, not as this historical paragraph.
 
 ---
 

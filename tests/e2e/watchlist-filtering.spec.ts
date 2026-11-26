@@ -258,7 +258,7 @@ test.describe('Watchlist filtering', () => {
 
 		await expect(filterInput(page)).toHaveValue('SAP');
 		await expect(stockRows(page)).toHaveCount(1);
-		await expect(targetPriceInput).toHaveValue('200');
+		await expect(targetPriceInput).toHaveValue('200.00'); // canonical minimum-two-decimal display (TASK-046 follow-up)
 	});
 
 	test('preserves the filter and shows a newly added matching stock', async ({ page }) => {

@@ -3,6 +3,7 @@ import {
 	AAPL_STOCK,
 	EQUAL_PRICE_TARGET_STOCK,
 	GAW_L_STOCK,
+	JPY_LARGE_PRICE_STOCK,
 	MISSING_PRICE_STOCK,
 	SAP_DE_STOCK,
 	UNKNOWN_STOCK
@@ -12,7 +13,7 @@ import {
 	mockWatchlistView,
 	mockWatchlistsMetadata
 } from './support/watchlistRoutes';
-import { savingsValue } from './support/stockLocators';
+import { distanceValue, savingsValue } from './support/stockLocators';
 import type { WatchlistStock } from '../../src/lib/client/watchlistApi';
 
 const WATCHLIST_ID = 'wl-1';
@@ -104,7 +105,7 @@ test.describe('Watchlist table', () => {
 		await expect(cells.nth(2)).toHaveText('—'); // market cap
 		await expect(cells.nth(3)).toHaveText('—'); // price
 		await expect(cells.nth(4)).toHaveText('—'); // currency
-		await expect(page.getByLabel('Target price for UNKNOWN')).toHaveValue('100'); // target price still present
+		await expect(page.getByLabel('Target price for UNKNOWN')).toHaveValue('100.00'); // target price still present, minimum two decimal places (TASK-046 follow-up)
 		await expect(cells.nth(7)).toHaveText('—'); // distance to target: unavailable, never a fabricated 0% (TASK-031)
 	});
 
@@ -134,7 +135,7 @@ test.describe('Watchlist table', () => {
 		const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'NOPRICE' });
 		const cells = row.getByRole('cell');
 		await expect(cells.nth(3)).toHaveText('—'); // price
-		await expect(page.getByLabel('Target price for NOPRICE')).toHaveValue('1');
+		await expect(page.getByLabel('Target price for NOPRICE')).toHaveValue('1.00'); // minimum two decimal places (TASK-046 follow-up)
 		const distanceCell = cells.nth(7);
 		await expect(distanceCell).toHaveText('—');
 		await expect(distanceCell).not.toContainText('%');
@@ -268,6 +269,94 @@ test.describe('Watchlist table', () => {
 			const cell = savingsValue(page, 'AAPL');
 			await expect(cell).toHaveText('€0');
 			await expect(cell).toHaveAttribute('title', '€0');
+		});
+	});
+
+	test.describe('Complete financial values via native titles (TASK-046)', () => {
+		test('a large JPY Price shows its full DOM text and a matching native title', async ({
+			page
+		}) => {
+			await mockSingleWatchlist(page, [JPY_LARGE_PRICE_STOCK]);
+			await page.goto('/');
+
+			const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'JPYBIG' });
+			const priceCell = row.getByRole('cell').nth(3);
+			await expect(priceCell).toHaveText('14,310.75');
+			await expect(priceCell).toHaveAttribute('title', '14,310.75');
+		});
+
+		test('Market Cap, Dividend Yield, and Savings Amount each expose a matching native title for a populated value', async ({
+			page
+		}) => {
+			await mockSingleWatchlist(page, [JPY_LARGE_PRICE_STOCK]);
+			await mockCalculateInvestmentAllocation(page, WATCHLIST_ID, () => ({
+				totalSavings: 1_234_567,
+				invested: 1_234_567,
+				allocations: [{ symbol: 'JPYBIG', factor: 1, savingsAmount: 1_234_567 }]
+			}));
+
+			await page.goto('/');
+			await page.getByLabel('Total savings').fill('1234567');
+			await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
+
+			const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'JPYBIG' });
+			const marketCapCell = row.getByRole('cell').nth(2);
+			await expect(marketCapCell).toHaveText('523.46');
+			await expect(marketCapCell).toHaveAttribute('title', '523.46');
+
+			const dividendYieldCell = row.getByRole('cell').nth(5);
+			await expect(dividendYieldCell).toHaveText('0.88%');
+			await expect(dividendYieldCell).toHaveAttribute('title', '0.88%');
+
+			const savingsCell = savingsValue(page, 'JPYBIG');
+			await expect(savingsCell).toHaveText('€1,234,567');
+			await expect(savingsCell).toHaveAttribute('title', '€1,234,567');
+		});
+
+		test('a signed Distance to Target shows a matching native title', async ({ page }) => {
+			await mockSingleWatchlist(page, [JPY_LARGE_PRICE_STOCK]);
+			await page.goto('/');
+
+			const distanceCell = distanceValue(page, 'JPYBIG');
+			await expect(distanceCell).toHaveText('-4.60%');
+			await expect(distanceCell).toHaveAttribute('title', '-4.60%');
+		});
+
+		test('missing values have no misleading title, while a real zero keeps its title (not missing)', async ({
+			page
+		}) => {
+			await mockSingleWatchlist(page, [UNKNOWN_STOCK]);
+			await page.goto('/');
+
+			const row = page.getByRole('table').locator('tbody tr').filter({ hasText: 'UNKNOWN' });
+			await expect(row.getByRole('cell').nth(2)).not.toHaveAttribute('title'); // market cap
+			await expect(row.getByRole('cell').nth(3)).not.toHaveAttribute('title'); // price
+			await expect(row.getByRole('cell').nth(5)).toHaveAttribute('title', '0.00%'); // dividend yield: real 0
+			await expect(distanceValue(page, 'UNKNOWN')).not.toHaveAttribute('title'); // distance: unavailable
+		});
+
+		test('a real zero Distance to Target keeps a matching title, distinct from the missing-value placeholder', async ({
+			page
+		}) => {
+			await mockSingleWatchlist(page, [EQUAL_PRICE_TARGET_STOCK]);
+			await page.goto('/');
+
+			const distanceCell = distanceValue(page, 'EQUAL');
+			await expect(distanceCell).toHaveText('0.00%');
+			await expect(distanceCell).toHaveAttribute('title', '0.00%');
+		});
+
+		test('no horizontal-overflow regression at a representative desktop width with an extreme-value stock', async ({
+			page
+		}) => {
+			await mockSingleWatchlist(page, [JPY_LARGE_PRICE_STOCK, SAP_DE_STOCK, AAPL_STOCK]);
+			await page.goto('/');
+
+			await expect(page.getByRole('table')).toBeVisible();
+			const overflows = await page.evaluate(
+				() => document.documentElement.scrollWidth > document.documentElement.clientWidth
+			);
+			expect(overflows).toBe(false);
 		});
 	});
 });

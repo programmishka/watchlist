@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
-import { AAPL_STOCK, GAW_L_STOCK, SAP_DE_STOCK, UNKNOWN_STOCK } from './fixtures/stocks';
+import {
+	AAPL_STOCK,
+	EQUAL_PRICE_TARGET_STOCK,
+	GAW_L_STOCK,
+	SAP_DE_STOCK,
+	UNKNOWN_STOCK
+} from './fixtures/stocks';
 import {
 	mockAddStock,
 	mockCalculateInvestmentAllocation,
@@ -141,6 +147,31 @@ test.describe('Investment allocation', () => {
 		await expect(distanceValue(page, 'UNKNOWN')).toHaveText('—'); // distance to target still unavailable
 		await expect(savingsCellFor(page, 'UNKNOWN')).toHaveText('€0');
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('€500');
+	});
+
+	test('an exact-zero-distance stock receives the corrected (nonzero) server allocation, not the old zero-factor result (TASK-046)', async ({
+		page
+	}) => {
+		// This mocked response only verifies presentation of whatever the
+		// server returns; the domain/service tests (investmentAllocation.spec.ts,
+		// InvestmentAllocationService.spec.ts) independently prove the
+		// corrected factor/savingsAmount calculation itself.
+		await mockSingleWatchlist(page, [EQUAL_PRICE_TARGET_STOCK]);
+		await mockCalculateInvestmentAllocation(page, WATCHLIST_ID, () => ({
+			totalSavings: 1000,
+			invested: 1000,
+			allocations: [{ symbol: 'EQUAL', factor: 1, savingsAmount: 1000 }]
+		}));
+
+		await page.goto('/');
+		await expect(distanceValue(page, 'EQUAL')).toHaveText('0.00%');
+
+		await page.getByLabel('Total savings').fill('1000');
+		await page.getByRole('button', { name: 'Calculate investment allocation' }).click();
+
+		await expect(page.getByText('Allocated savings: €1,000')).toBeVisible();
+		await expect(savingsCellFor(page, 'EQUAL')).toHaveText('€1,000');
+		await expect(savingsCellFor(page, 'EQUAL')).not.toHaveText('€0');
 	});
 
 	test('rejects invalid local input, sends no request, and preserves the previous allocation', async ({
@@ -336,7 +367,7 @@ test.describe('Investment allocation', () => {
 		const targetPriceInput = page.getByLabel('Target price for SAP.DE');
 		await targetPriceInput.fill('160');
 		await targetPriceInput.blur();
-		await expect(targetPriceInput).toHaveValue('160');
+		await expect(targetPriceInput).toHaveValue('160.00'); // canonical minimum-two-decimal display (TASK-046 follow-up)
 
 		await expect(page.getByText('Allocated savings:')).toHaveCount(0);
 		await expect(savingsCellFor(page, 'SAP.DE')).toHaveText('—');

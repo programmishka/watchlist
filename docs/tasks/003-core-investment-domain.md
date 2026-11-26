@@ -10,6 +10,15 @@ Done
 > `0`. This file is kept as historical record and is not rewritten as though
 > nullable distance semantics had always existed.
 
+> **Superseded in part by TASK-046:** §3 below states that an exact
+> target-price distance of `0` producing investment factor `0` "MUST NOT be
+> 'corrected'" — that rule is reversed. TASK-046 corrected
+> `calculateInvestmentFactor` so an exact numeric zero distance (a real
+> valuation, not missing data) is evaluated by the regular formula
+> (`factor = 1`), while an unavailable (`undefined`) distance still yields
+> factor `0`. See ARCHITECTURE.md §22.2 for the corrected formula and
+> rationale. This file remains historical record.
+
 ## Goal
 
 Implement the first infrastructure-independent business logic of the Watchlist application.
@@ -188,6 +197,11 @@ undefined -> 0
 ```
 
 The fact that an exact target-price distance of `0` results in factor `0` is intentional for the current implementation and MUST NOT be "corrected" as part of this task.
+
+> **Superseded by TASK-046:** this rule was later identified as a real defect (a stock exactly at
+> its Target Price was wrongly excluded from allocation) and corrected — an exact zero distance now
+> uses the regular formula (`factor = 1`), while an unavailable distance still yields `factor = 0`.
+> See ARCHITECTURE.md §22.2.
 
 Test positive and negative target-price distances.
 

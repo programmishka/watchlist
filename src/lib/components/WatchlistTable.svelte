@@ -5,6 +5,7 @@
 		formatPercentage,
 		formatSignedPercentage,
 		formatWholeEuro,
+		isDisplayableNumber,
 		MISSING_VALUE_PLACEHOLDER
 	} from '$lib/client/format';
 	import type { WatchlistSort, WatchlistSortColumn } from '$lib/client/watchlistSort';
@@ -86,15 +87,31 @@
 		<tbody>
 			{#each stocks as stock (stock.symbol)}
 				{@const distanceState = distanceStateFor(stock.distanceToTarget)}
+				{@const formattedMarketCap = formatNumber(stock.marketCapBillionsUsd)}
+				{@const formattedPrice = formatNumber(stock.price)}
+				{@const formattedDividendYield = formatPercentage(stock.dividendYield)}
+				{@const formattedDistance = formatSignedPercentage(stock.distanceToTarget)}
 				{@const savingsAmount = allocationBySymbol?.get(stock.symbol)?.savingsAmount}
 				{@const formattedSavingsAmount = formatWholeEuro(savingsAmount)}
 				<tr class="stock-row">
 					<td class="symbol">{stock.symbol}</td>
 					<td class="name">{stock.name ?? MISSING_VALUE_PLACEHOLDER}</td>
-					<td class="numeric">{formatNumber(stock.marketCapBillionsUsd)}</td>
-					<td class="numeric">{formatNumber(stock.price)}</td>
+					<td
+						class="numeric"
+						title={isDisplayableNumber(stock.marketCapBillionsUsd) ? formattedMarketCap : undefined}
+					>
+						{formattedMarketCap}
+					</td>
+					<td class="numeric" title={isDisplayableNumber(stock.price) ? formattedPrice : undefined}>
+						{formattedPrice}
+					</td>
 					<td>{stock.currency ?? MISSING_VALUE_PLACEHOLDER}</td>
-					<td class="numeric">{formatPercentage(stock.dividendYield)}</td>
+					<td
+						class="numeric"
+						title={isDisplayableNumber(stock.dividendYield) ? formattedDividendYield : undefined}
+					>
+						{formattedDividendYield}
+					</td>
 					<td class="numeric target-price-cell">
 						<TargetPriceCell
 							symbol={stock.symbol}
@@ -103,12 +120,15 @@
 							onSave={onSaveTargetPrice}
 						/>
 					</td>
-					<td class="numeric distance-value distance-{distanceState}">
-						{formatSignedPercentage(stock.distanceToTarget)}
+					<td
+						class="numeric distance-value distance-{distanceState}"
+						title={isDisplayableNumber(stock.distanceToTarget) ? formattedDistance : undefined}
+					>
+						{formattedDistance}
 					</td>
 					<td
 						class="numeric savings-value"
-						title={savingsAmount !== undefined ? formattedSavingsAmount : undefined}
+						title={isDisplayableNumber(savingsAmount) ? formattedSavingsAmount : undefined}
 					>
 						{formattedSavingsAmount}
 					</td>

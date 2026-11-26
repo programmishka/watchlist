@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { parseTargetPriceInput } from '$lib/client/targetPriceInput';
+	import { formatEditableNumber } from '$lib/client/format';
 	import { TARGET_PRICE_INPUT_MAX_LENGTH } from '$lib/shared/targetPrice';
 
 	export type TargetPriceSaveResult =
@@ -14,8 +15,11 @@
 
 	let { symbol, targetPrice, busy = false, onSave }: Props = $props();
 
+	// Locale-aware editable formatting (TASK-046): the same decimal-separator
+	// policy as the display formatters, not a hardcoded separator, and never
+	// rounds a stored value with more than two decimal places (TASK-038).
 	function formatForInput(value: number | undefined): string {
-		return value === undefined ? '' : String(value);
+		return formatEditableNumber(value);
 	}
 
 	let inputValue = $state('');
@@ -37,6 +41,16 @@
 
 	async function commit() {
 		if (saving) {
+			return;
+		}
+
+		if (inputValue === formatForInput(committedValue)) {
+			// Unmodified from the last canonical/server-confirmed text: a pure
+			// no-op, even for a representability edge case (TASK-046 follow-up
+			// §5) where that canonical text itself cannot be parsed back
+			// exactly (e.g. an extremely small Target Price still shown in
+			// scientific notation) — merely focusing and leaving the field must
+			// never produce a spurious validation error or mutation.
 			return;
 		}
 
